@@ -1,0 +1,8 @@
+[
+    {
+        "paths":["~/work/temp/DDLog/"],
+        "users":[
+            {"name": "terry", "password": "123"}
+        ]
+    }
+]
