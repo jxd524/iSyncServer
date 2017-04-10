@@ -139,6 +139,7 @@ class AppConfig(object):
 
         if result is None:
             result = aDefaultValue;
+
         return result;
 
 if __name__ == "__main__":

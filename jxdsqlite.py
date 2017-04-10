@@ -51,6 +51,22 @@ class JxdSqlDataBasic(object):
             cur.close();
         return None
 
+    def execute(self, aSql, aArgs=None):
+        "执行一条SQL语句"
+        try:
+            cur = self.connect().cursor();
+            if aArgs:
+                cur.execute(aSql, aArgs);
+            else:
+                cur.execute(aSql);
+            return True;
+        except Exception as e:
+            print(e);
+        finally:
+            cur.close();
+        return False;
+
+
     def select(self, aTableName, aWheres, aFields="*", aOneRecord=True):
         "查询数据"
         values = [];
@@ -96,6 +112,22 @@ class JxdSqlDataBasic(object):
         strWhere = self.FormatFieldValues(aWheres, values, "and");
 
         sql = "update %s set %s where %s" % (aTableName, updateFields, strWhere);
+        try:
+            cur = self.cursor();
+            cur.execute(sql, values);
+            return True;
+        except Exception as e:
+            raise e
+        finally:
+            cur.close();
+        return False;
+
+    def delete(self, aTableName, aWheres):
+        "删除指定的数据行"
+        values = [];
+        strWhere = self.FormatFieldValues(aWheres, values, "and");
+
+        sql = "delete from %s where %s" % (aTableName, strWhere);
         try:
             cur = self.cursor();
             cur.execute(sql, values);

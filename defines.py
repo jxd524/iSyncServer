@@ -26,4 +26,5 @@ kThumbnailImageMaxSize = 200
 # 生成等比例屏幕大小缩略图时,最大长度,只有视频文件需要
 kScreenThumbnailImageMaxSize = 800
 
+kAppSecretKey = "sjjdicjLKDI(*&%#_)^!BJsdj182312Jippxmw[OP]12><MK>"
 

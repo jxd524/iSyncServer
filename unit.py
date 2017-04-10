@@ -138,15 +138,4 @@ def generateThumbailImage(aRootId, aPathId, aFileId, aInputFile, aOrgWidth, aOrg
     return strOutFile;
 
 if __name__ == "__main__":
-    a = 10
-    if a == 100:
-        bOK = True
-    else:
-        bOK = False;
-
-    if bOK:
-        print("OK")
-    else:
-        print("NO");
-
     print("finished");

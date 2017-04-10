@@ -25,6 +25,7 @@ class ScanDisk(object):
         self.__rootPaths = [];
         self.__dbManager = aDataBase;
         self.__scaning = False;
+        self.__mergeRootPaths = True;
         self.__rootIds = [];
         self.__ownerUserIds = aOwnerUserIds;
         for item in aRootPaths:
@@ -47,6 +48,13 @@ class ScanDisk(object):
     @property
     def ownerUserIds(self):
         return self.__ownerUserIds;
+
+    @property
+    def mergeRootPaths(self):
+        return self.__mergeRootPaths;
+    @mergeRootPaths.setter
+    def mergeRootPaths(self, aValue):
+        self.__mergeRootPaths = aValue;
 
 #public function
     def startScan(self):
@@ -76,6 +84,12 @@ class ScanDisk(object):
             for userId in self.ownerUserIds:
                 for rootId in self.rootPathIds:
                     self.dbManager.makeUserAssociate(userId, rootId);
+
+        # 根目录化子目录
+        if self.mergeRootPaths and self.ownerUserIds:
+            for userId in self.ownerUserIds:
+                self.dbManager.checkUpdateCatelogRootInfo(userId);
+
 
         self.__scaning = False;
 
@@ -191,18 +205,19 @@ class ScanDisk(object):
                     if bHasAudioStream:
                         nFileStyle = defines.kFileTypeVideo;
                     elif mediaInfo["format"]["format_name"].lower() == "gif":
-                        nFileStyle = kFileTypeGif;
+                        nFileStyle = defines.kFileTypeGif;
                     else:
-                        nFileStyle = kFileTypeImage;
+                        nFileStyle = defines.kFileTypeImage;
                 elif bHasAudioStream:
-                    nFileStyle = kFileTypeFile;
+                    nFileStyle = defines.kFileTypeFile;
 
                 # Txt 文件
                 if mediaInfo["format"]["format_long_name"] == "Tele-typewriter":
-                    nFileStyle = kFileTypeFile;
+                    nFileStyle = defines.kFileTypeFile;
             except Exception as e:
                 #do not need handle
-                print("Error: parse json dat(getFileMediaInfo result data)")
+                print(e);
+                print("Error: parse json dat(getFileMediaInfo result data): ", strName);
                 pass;
 
         #add to db
@@ -233,6 +248,7 @@ def main():
             if op == "-i":
                 #根据配置文件来扫描数据
                 scanByJsonFile(value);
+                return;
 
 def scanByJsonFile(aJsonFileName):
     "根据配置文件扫描数据"
@@ -250,13 +266,19 @@ def scanByJsonFile(aJsonFileName):
     dm = DataManager();
     for item in config:
         try:
-            paths = item.get("paths");
-            users = makeUsers(dm, item.get("users"));
-            sd = ScanDisk(users, paths, dm);
-            sd.startScan();
+            beginScan(item.get("paths"), item.get("users"), dm, item.get("merge"));
         except Exception as e:
             print(e);
     dm.save();
+
+def beginScan(aPaths, aUsers, aDM = None, aMergeRootPath = True):
+    if aDM is None:
+        aDM = DataManager();
+    users = makeUsers(aDM, aUsers);
+    sd = ScanDisk(users, aPaths, aDM);
+    if aMergeRootPath is not None:
+        sd.mergeRootPaths = aMergeRootPath;
+    sd.startScan();
 
 def makeUsers(aDataManager, aUsers):
     "处理配置文件中users对象,生成用户表数据,插入数据库"
@@ -275,4 +297,7 @@ def makeUsers(aDataManager, aUsers):
 
 if __name__ == "__main__":
     main();
+    # paths = ["/Users/terry/temp/"];
+    # users = [{"name": "terry", "password": "123123"}];
+    # beginScan(paths, users);
 

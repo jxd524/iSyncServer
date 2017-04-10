@@ -38,7 +38,8 @@ kUserFieldName                      = __incFieldWithInit(); #用户名
 kUserFieldPassword                  = __incFieldWithInit(); #用户密码
 kUserFieldCreateTime                = __incFieldWithInit(); #创建时间
 kUserFieldLastLoginDate             = __incFieldWithInit(); #最后登陆时间
-kUserFieldiPrivateRootCatologId     = __incFieldWithInit(); #用于存放iPrivate客户端加密的数据
+kUserFieldHelpInt                   = __incFieldWithInit(); #辅助Int,只对客户端有意义,服务端只负责保存
+kUserFieldHelpText                  = __incFieldWithInit(); #辅助信息,只对客户端有意思
 def _UserCreateTableSQL():
     """
     创建用户表的SQL语句
@@ -50,7 +51,8 @@ def _UserCreateTableSQL():
                 password varchar(32),
                 createTime timestamp default(0),
                 lastLoginDate timestamp default(0),
-                iPrivateRootCatologId integer DEFAULT(-1)
+                helpInt integer,
+                helpText text
             )""" % _kUserTableName;
 
 
@@ -272,6 +274,25 @@ class DataManager(JxdSqlDataBasic):
         afv = {"lastModifyTime": time.time()};
         return self.update(_kCatalogTableName, {"id": aId}, fv, afv);
 
+    def checkUpdateCatelogRootInfo(self, aUserId):
+        "判断指定的用户的根目录是否需要更新"
+        associateRootIds = self.getUserRootCatalogs(aUserId);
+        for rootId in associateRootIds:
+            catInfo = self.getCatalogById(rootId);
+            parentPath = os.path.dirname(catInfo[kCatalogFieldPath]);
+            parentCatInfo = self.getCatalogByPath(parentPath);
+            if parentCatInfo:
+                self.update(_kCatalogTableName, {"id": rootId}, 
+                        {"rootId": parentCatInfo[kCatalogFieldRootId],
+                         "parentId": parentCatInfo[kCatalogFieldId]});
+                self.update(_kCatalogTableName, {"rootId": rootId}, 
+                        {"rootId": parentCatInfo[kCatalogFieldRootId]});
+                self.delete(_kUserAssociateTableName, {"rootCatalogId": rootId});
+                self.update(_kFileTableName, {"rootCatalogId": rootId}, 
+                        {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
+
+
+
 #public function - File
     def getFileByCatalogId(self, aCatalogId, aFileName):
         "根据指定目录 ID 和文件名获取文件信息"
@@ -412,6 +433,27 @@ class DataManager(JxdSqlDataBasic):
             rows = result;
         return rows;
 
+#public function - help info
+    def getHelpInfo(self, aTableType, aRecordId, aStrRootIds=None):
+        "从不同的表中获取不同的HelpInfo信息"
+        strFields = "helpInt, helpText";
+        if aTableType == 0:
+            return self.select(_kUserTableName, {"id": aRecordId}, strFields)
+        else:
+            strTableName = _kCatalogTableName if aTableType == 1 else _kFileTableName;
+            sql = "select {fileds} from {table} where rootCatalogId in({rootIds}) and id=?".format(
+                    fileds=strFields, table=strTableName, rootIds=aStrRootIds);
+            return self.fetch(sql, (aRecordId));
+
+    def setHelpInfo(self, aTableType, aRecordId, aHelpInt, aHelpText, aStrRootIds=None):
+        "设置不同表记录的HelpInfo信息"
+        if aStrTypes == 0:
+            self.update(_kUserTableName, {"id": aRecordId}, {"helpInt": aHelpInt, "helpText": aHelpText})
+        else:
+            strTableName = _kCatalogTableName if aTableType == 1 else _kFileTableName;
+            sql = "update {table} set helpInt=?, helpText=? where rootCatalogId in({rootIds}) and id=?".format(
+                    table=strTableName, rootIds=aStrRootIds);
+            self.execute(sql, (aHelpInt, aHelpText, aRecordId));s
 
 if __name__ == "__main__":
     print("begin test")
