@@ -193,6 +193,20 @@ def makeUserCreateCatalogPath(aParentPath, aName):
         print(e)
     return None
 
+def formatInField(aName, aValue):
+    "格式SQL的in查询字段"
+    return (lambda :"{} in ({})".format(aName, aValue)) if aValue != None else None
+
+def makeValue(self, aDict, aKey, aDefaultValue):
+    "确保容器存在指定key,value"
+    v = aDict.get(aKey)
+    if v == None:
+        aDict[aKey] = aDefaultValue
+
+def removePath(aPath):
+    import subprocess
+    subprocess.Popen("rm -rf '{}'".format(aPath), shell=True)
+
+
 if __name__ == "__main__":
-    makeUserCreateCatalogPath("/Users/terry/work/temp", "my./Test")
-    makeUserCreateCatalogPath("/Users/terry/work/temp", "my./Test")
+    pass

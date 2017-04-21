@@ -294,7 +294,8 @@ def appUpdateCatalog():
     result = checkApiParam(True, [
         {"name": "id", "checkfunc": unit.checkParamForInt},
         {"name": "parentId", "checkfunc": unit.checkParamForInt, "default": None},
-        {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None, "default": None},
+        {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None, 
+            "default": None},
         {"name": "memo", "default": None},
         {"name": "helpInt", "default": None},
         {"name": "helpText", "default": None}]) 

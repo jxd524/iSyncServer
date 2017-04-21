@@ -11,6 +11,8 @@ __author__="Terry<jxd524@163.com>"
 import os, sys, time
 from jxdsqlite import JxdSqlDataBasic
 import defines, log, unit
+from unit import formatInField
+from unit import makeValue
 
 """
 方便定义字段序号
@@ -94,7 +96,8 @@ def _CatalogCreateTableSQL():
 _kFileTableName = "Files";
 kFileFieldId                    = __incFieldWithInit(True); #ID
 kFileFieldRootCatalogId         = __incFieldWithInit(); #所属根目录ID
-kFileFieldCatalogId             = __incFieldWithInit(); #对应的路径ID
+kFileFieldCatalogId             = __incFieldWithInit(); #对应的路径ID,此值可被修改
+kFileFieldRealCatalogId         = __incFieldWithInit(); #对应的路径ID,此值不被修改,指明实际的位置
 kFileFieldFileName              = __incFieldWithInit(); #文件名称,不包括路径
 kFileFieldName                  = __incFieldWithInit(); #显示名称,默认为空
 kFileFieldCreateTime            = __incFieldWithInit(); #创建时间
@@ -119,6 +122,7 @@ def _FileCreateTableSQL():
                 id integer primary key autoIncrement,
                 rootCatalogId integer,
                 catalogId integer,
+                realCatalogId integer,
                 fileName varchar(100) collate nocase,
                 name varchar(100) collate nocase,
                 createTime timestamp,
@@ -127,7 +131,7 @@ def _FileCreateTableSQL():
                 lastModifyTime timestamp,
                 size integer,
                 type integer,
-                duration double default 0,
+                duration float default 0,
                 width integer,
                 height integer,
                 thumbFileStatus char DEFAULT(0),
@@ -137,7 +141,7 @@ def _FileCreateTableSQL():
                 memo varchar(1024),
                 helpInt integer,
                 helpText text,
-                unique(catalogId, fileName)
+                unique(realCatalogId, fileName)
             )""" % _kFileTableName;
 
 
@@ -157,7 +161,8 @@ def _UserAssociateCreateTableSQL():
                 unique(userId, rootCatalogId)
             )""" % _kUserAssociateTableName;
 
-
+# 后续不需要再使用此变量了
+del __gFieldIndex
 
 """
 
@@ -221,18 +226,16 @@ class DataManager(JxdSqlDataBasic):
         "根据Id,获取目录信息,不存在返回None"
         return self.select(_kCatalogTableName, {"id": aId});
 
-    def getCatalogByIdAndRootIds(self, aId, aRootIds):
+    def getCatalogByIdAndRootIds(self, aId, aLimitStrRootIds):
         "获取指定 Id 的目录信息"
-        return self.select(_kCatalogTableName, {"id": aId, (lambda :"rootId in ({})".format(aRootIds)): None})
+        return self.select(_kCatalogTableName, {"id": aId, formatInField("rootId", aLimitStrRootIds): None})
 
-    def getCatalogsByParentIds(self, aParentIds, aRootIds):
+    def getCatalogsByParentIds(self, aParentIds, aLimitStrRootIds):
         "获取在RootIds下的所有aParentIds数据"
-        where = {}
-        if aRootIds != None:
-            where[lambda :"rootId in ({})".format(aRootIds)] = None
-        if aParentIds != None:
-            where[lambda :"parentId in ({})".format(aParentIds)] = None
-        return self.select(_kCatalogTableName, where, aOneRecord=False)
+        return self.select(_kCatalogTableName, 
+                {formatInField("rootId", aLimitStrRootIds): None,
+                    formatInField("parentId", aParentIds): None},
+                aOneRecord=False)
 
     def getCatalogState(self, aId):
         "获取指定目录的子目录数量,文件数量; 此SQL语句后续可优化,与getCatalogsByParentIds一起查询出来"
@@ -275,6 +278,7 @@ class DataManager(JxdSqlDataBasic):
                 aCatalogInfo["rootId"] = pci[kCatalogFieldRootId] if pci else -1
 
             nId = self.insert(_kCatalogTableName, aCatalogInfo)
+        # end if
         result = self.select(_kCatalogTableName, {"id": nId})
         if result and result[kCatalogFieldRootId] == -1:
             result = list(result)
@@ -282,20 +286,23 @@ class DataManager(JxdSqlDataBasic):
             self.update(_kCatalogTableName, {"id": nId}, {"rootId": nId})
         return result
 
-    def updateCatalog(self, aId, aCatalogInfo, aRootIds):
+    def updateCatalog(self, aId, aCatalogInfo, aLimitStrRootIds):
         "更新目录信息, 若需要修改 parentId, 则可能需要修改rootId和所对应的File的rootCatalogId"
         bUpdateFileTable = False
         nNewRootId = None
-        if aRootIds != None:
+        if aLimitStrRootIds != None:
             # 只有传递 rootids 信息时,才进行修改(客户端才需要传递)
             nNewParentId = aCatalogInfo.get("parentId")
             if nNewParentId != None:
-                row = self.select(_kCatalogTableName, {
-                    (lambda :"id in ({},{})".format(aId, nNewParentId)): None,
-                    (lambda :"rootId in ({})".format(aRootIds)): None}, aOneRecord=False)
+                row = self.select(_kCatalogTableName, 
+                        {formatInField("id", aId): None,
+                            formatInField("rootId", aLimitStrRootIds): None},
+                        aOneRecord=False)
                 if row != None and len(row) == 2:
-                    nOldRootId = row[0][kCatalogFieldRootId]
-                    nNewRootId = row[1][kCatalogFieldRootId]
+                    nNewRowIndex = 0 if row[0][kCatalogFieldId] == nNewParentId else 1
+                    nOldRowIndex = 0 if nNewRowIndex == 1 else 1
+                    nOldRootId = row[nOldRowIndex][kCatalogFieldRootId]
+                    nNewRootId = row[nNewRowIndex][kCatalogFieldRootId]
                     if nOldRootId != nNewRootId:
                         bUpdateFileTable = True
                         aCatalogInfo["rootId"] = nNewRootId
@@ -306,8 +313,10 @@ class DataManager(JxdSqlDataBasic):
         afv = None;
         if aCatalogInfo.get("lastModifyTime") == None:
             afv = {"lastModifyTime": time.time()};
-        bOK = self.update(_kCatalogTableName, {"id": aId,
-            (lambda :"rootId in ({})".format(aRootIds) if aRootIds != None else None): None}, aCatalogInfo, afv);
+        bOK = self.update(_kCatalogTableName, 
+                {"id": aId,
+                    formatInField("rootId", aLimitStrRootIds): None},
+                aCatalogInfo, afv);
 
         #更新File表
         if bOK and bUpdateFileTable:
@@ -324,28 +333,27 @@ class DataManager(JxdSqlDataBasic):
             if parentCatInfo:
                 self.update(_kCatalogTableName, {"id": rootId}, 
                         {"rootId": parentCatInfo[kCatalogFieldRootId],
-                         "parentId": parentCatInfo[kCatalogFieldId]});
+                            "parentId": parentCatInfo[kCatalogFieldId]});
                 self.update(_kCatalogTableName, {"rootId": rootId}, 
                         {"rootId": parentCatInfo[kCatalogFieldRootId]});
                 self.delete(_kUserAssociateTableName, {"rootCatalogId": rootId});
                 self.update(_kFileTableName, {"rootCatalogId": rootId}, 
                         {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
 
-    def deleteCatalogs(self, aIds, aRootIds):
+    def deleteCatalogs(self, aIds, aLimitStrRootIds):
         "删除指定目录"
-        if aIds == None or aRootIds == None:
+        if aIds == None or aLimitStrRootIds == None:
             return
-        rows = self.select(_kCatalogTableName, {(lambda :"rootId in ({})".format(aRootIds)): None,
-            (lambda :"id in ({})".format(aIds)): None,
-            (lambda :"parentId != -1"): None}, aOneRecord=False)
+        rows = self.select(_kCatalogTableName, 
+                {formatInField("rootId", aLimitStrRootIds): None,
+                    formatInField("id", aIds): None,
+                    (lambda :"parentId != -1"): None},
+                aOneRecord=False)
 
         self._loopDeleteCatalogRecords(rows)
         for item in rows:
             path = item[kCatalogFieldPath]
-            # 使用 shell 删除
-            import subprocess
-            subprocess.Popen("rm -rf '{}'".format(path), shell=True)
-
+            unit.removePath(path)
 
     def _loopDeleteCatalogRecords(self, aParentRows):
         "递归删除指定目录的子目录与相关文件的数据库记录"
@@ -360,68 +368,80 @@ class DataManager(JxdSqlDataBasic):
                 cids = "{}".format(nid)
 
         # 删除文件
-        self.delete(_kFileTableName, {(lambda :"catalogId in ({})".format(cids)): None})
+        self.delete(_kFileTableName, {formatInField("catalogId", cids): None})
 
         # 删除信息
-        self.delete(_kCatalogTableName, {(lambda :"id in ({})".format(cids)): None})
+        self.delete(_kCatalogTableName, {formatInField("id",cids): None})
 
         # 删除子目录
-        rows = self.select(_kCatalogTableName, {(lambda :"parentId in ({})".format(cids)): None}, aOneRecord=False)
+        rows = self.select(_kCatalogTableName, 
+                {formatInField("parentId", cids): None}, 
+                aOneRecord=False)
         self._loopDeleteCatalogRecords(rows)
 
 
 #public function - File
-    def getFileByCatalogId(self, aCatalogId, aFileName):
+    def getFileByRealCatalogId(self, aRealCatalogId, aFileName, aLimitStrRootIds = None):
         "根据指定目录 ID 和文件名获取文件信息"
-        return self.select(_kFileTableName, {"catalogId": aCatalogId, "fileName": aFileName});
+        return self.select(_kFileTableName, 
+                {"realCatalogId": aRealCatalogId,
+                    "fileName": aFileName,
+                    formatInField("rootCatalogId", aLimitStrRootIds): None})
 
-    def addFile(self, aRootCatalogId, aCatalogId, aFileName, aFileType, aSize, aCreateTime,\
-            aWidth=None, aHeight=None, aName=None, aUploadTime=None, aImportTime=None, \
-            aThumbFileStatus=defines.kFileStatusFormLocal, aScreenThumbFileStatus= defines.kFileStatusFormLocal,\
-            aOriginFileStatus=defines.kFileStatusFormLocal, aOrientation=0,aMemo=None,  \
-            aDuration=None, aHelpInt=None, aHelpText=None):
-        "添加文件信息"
-        fv = {"rootCatalogId": aRootCatalogId,
-              "catalogId": aCatalogId,
-              "fileName": aFileName,
-              "name": aName,
-              "createTime": aCreateTime,
-              "uploadTime": aUploadTime,
-              "importTime": aImportTime if aImportTime else time.time(),
-              "lastModifyTime": time.time(),
-              "size": aSize,
-              "type": aFileType,
-              "duration": aDuration,
-              "width": aWidth,
-              "height": aHeight,
-              "thumbFileStatus": aThumbFileStatus,
-              "screenThumbFileStatus": aScreenThumbFileStatus,
-              "originFileStatus": aOriginFileStatus,
-              "orientation": aOrientation,
-              "memo": aMemo,
-              "helpInt": aHelpInt,
-              "helpText": aHelpText};
-        return self.insert(_kFileTableName, fv);
+    def addFile(self, aRootId, aRealCatalogId, aFileInfo, aFromLocal):
+        """添加文件信息
+            直接添加,调用者必须确保键值的正确性
+        """
+        curTime = time.time()
+        if aFromLocal:
+            nFileStatus = defines.kFileStatusFromLocal
+            makeValue(aFileInfo, "importTime", curTime)
+        else:
+            nFileStatus = defines.kFileStatusFromUploading
+        aFileInfo["rootCatalogId"] = aRootId
+        aFileInfo["realCatalogId"] = aRealCatalogId
+        makeValue(aFileInfo, "catalogId", aRealCatalogId)
+        makeValue(aFileInfo, "thumbFileStatus", nFileStatus)
+        makeValue(aFileInfo, "screenThumbFileStatus", nFileStatus)
+        makeValue(aFileInfo, "originFileStatus", nFileStatus)
+        makeValue(aFileInfo, "createTime", curTime)
+        makeValue(aFileInfo, "lastModifyTime", curTime)
+        return self.insert(_kFileTableName, aFileInfo)
 
-    def updateFile(self, aId, aName=None, aHelpInt=None, aHelpText=None, \
-            aUploadTime=None, aImportTime=None, aWidth=None, aHeight=None, aDuration=None, \
-            aRootCatalogId=None, aCatalogId=None, aFileType=None, aSize=None, aFileName=None):
-        "更新文件信息"
-        fv = {"rootCatalogId": aRootCatalogId,
-              "catalogId": aCatalogId,
-              "fileName": aFileName,
-              "name": aName,
-              "uploadTime": aUploadTime,
-              "importTime": aImportTime,
-              "size": aSize,
-              "type": aFileType,
-              "duration": aDuration,
-              "width": aWidth,
-              "height": aHeight,
-              "helpInt": aHelpInt,
-              "helpText": aHelpText};
-        afv = {"lastModifyTime": time.time()};
-        return self.update(_kFileTableName, {"id": aId}, fv, afv);
+    def updateFile(self, aFileId, aFileInfo, aLimitStrRootIds):
+        """更新文件信息
+            若存在aLimitStrRootIds和aFileInfo["catalogId"]有效时, 只修改数据信息,不会真正移动文件
+        """
+        if aLimitStrRootIds != None and aFileInfo.get("catalogId") != None:
+            #新位置是否有效
+            nNewCatalogId = aFileInfo["catalogId"]
+            newCatalogRow = self.select(_kCatalogTableName, 
+                    {"id": nNewCatalogId, formatInField("rootId", aLimitStrRootIds): None})
+            if not newCatalogRow:
+                return False
+
+            #当前位置时判断
+            row = self.select(_kFileTableName, 
+                    {"id": aFileId, 
+                        formatInField("rootCatalogId", aLimitStrRootIds): None})
+            if not row:
+                return False
+
+            #是否要修改
+            nOldCatalogId = row[kFileFieldCatalogId]
+            if nNewCatalogId != nOldCatalogId:
+                aFileInfo["rootCatalogId"] = nNewParentId
+            else:
+                aFileInfo.pop("catalogId")
+
+        # 更新数据
+        afv = None;
+        if aFileInfo.get("lastModifyTime") == None:
+            afv = {"lastModifyTime": time.time()};
+        bOK = self.update(_kFileTableName,
+                {"id": aId,
+                    formatInField("rootId", aLimitStrRootIds): None}, 
+                aCatalogInfo, afv);
 
     def getFileWithRootAndId(self, aStrRootIds, aFileId):
         """获取指定 Id 的文件信息
@@ -537,13 +557,6 @@ class DataManager(JxdSqlDataBasic):
         self.update(strTableName, where, {"helpInt": aHelpInt, "helpText": aHelpText}, 
                 {"lastModifyTime": time.time()})
 
-#private function
-    def _makeValue(self, aDict, aKey, aDefaultValue):
-        v = aDict.get(aKey)
-        if v == None:
-            aDict[aKey] = aDefaultValue
-
-
 
 #help function - global
 def buildUserInfo(aUserRow):
@@ -584,7 +597,8 @@ def buildCatalogInfo(aCatalogRow, aDbObject):
 if __name__ == "__main__":
     print("begin test")
     db = DataManager()
-    db.updateCatalog(9, {"parentId": 1, "name": "moveTest"}, "1")
+    print(db.getFileByRealCatalogId(1, "a2.mp3"))
+    # db.updateCatalog(9, {"parentId": 1, "name": "moveTest"}, "1")
     # db.deleteCatalogs("3, 4,5", "1,2,3")
     # db.makeCatalog({"path": "/A/B/1"})
     # db.makeCatalog({"path": "/a/b/"})

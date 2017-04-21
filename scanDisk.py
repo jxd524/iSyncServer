@@ -220,9 +220,17 @@ class ScanDisk(object):
         #add to db
         # strFileName = os.path.split(aFileName)[1];
         print("     %s" % strName);
-        self.dbManager.addFile(aRootCatalogId=aRootId, aCatalogId=aPathId, aFileName=strName,
-                aFileType= nFileStyle, aSize=nFileSize, aCreateTime=nCreateTime,
-                aWidth=nWidth, aHeight=nHeight, aDuration=nDuration);
+        self.dbManager.addFile(aRootCatalogId=aRootId, aCatalogId=aPathId,
+                { "fileName": strName, 
+                    "type": nFileStyle,
+                    "size": nFileSize,
+                    "createTime": nCreateTime,
+                    "width": nWidth,
+                    "height": nHeight,
+                    "duration": nDuration})
+        # addFile(aRootCatalogId=aRootId, aCatalogId=aPathId, aFileName=strName,
+                # aFileType= nFileStyle, aSize=nFileSize, aCreateTime=nCreateTime,
+                # aWidth=nWidth, aHeight=nHeight, aDuration=nDuration);
 
 ####################end ScanDisk####################
 

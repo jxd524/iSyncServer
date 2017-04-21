@@ -1,6 +1,6 @@
 [
     {
-        "paths":["~/work/temp/DDLog/"],
+        "paths":["~/temp/myTest", "~/temp/DDLog"],
         "users":[
             {"name": "terry", "password": "123"}
         ]

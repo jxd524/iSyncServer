@@ -8,9 +8,9 @@
 __author__="Terry<jxd524@163.com>"
 
 # 文件状态
-kFileStatusFormLocal        = 0 # 来自本地
-kFileStatusFormUploading    = 1 # 来自上传
-kFileStatusFormUploaded     = 2 # 来自上传,并且已经上传完成
+kFileStatusFromLocal        = 0 # 来自本地
+kFileStatusFromUploading    = 1 # 来自上传
+kFileStatusFromUploaded     = 2 # 来自上传,并且已经上传完成
 
 # 媒体类型
 kFileTypeImage      = 1 << 0
