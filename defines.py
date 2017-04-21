@@ -28,3 +28,5 @@ kScreenThumbnailImageMaxSize = 800
 
 kAppSecretKey = "sjjdicjLKDI(*&%#_)^!BJsdj182312Jippxmw[OP]12><MK>"
 
+#登录用户有权限的目录ID
+kSessionUserKey = "Session_UserKey"

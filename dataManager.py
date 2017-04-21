@@ -10,7 +10,7 @@ __author__="Terry<jxd524@163.com>"
 
 import os, sys, time
 from jxdsqlite import JxdSqlDataBasic
-import defines, log
+import defines, log, unit
 
 """
 方便定义字段序号
@@ -38,6 +38,7 @@ kUserFieldName                      = __incFieldWithInit(); #用户名
 kUserFieldPassword                  = __incFieldWithInit(); #用户密码
 kUserFieldCreateTime                = __incFieldWithInit(); #创建时间
 kUserFieldLastLoginDate             = __incFieldWithInit(); #最后登陆时间
+kUserFieldLastModifyTime            = __incFieldWithInit(); #针对HelpInfo,最后修改时间
 kUserFieldHelpInt                   = __incFieldWithInit(); #辅助Int,只对客户端有意义,服务端只负责保存
 kUserFieldHelpText                  = __incFieldWithInit(); #辅助信息,只对客户端有意思
 def _UserCreateTableSQL():
@@ -51,6 +52,7 @@ def _UserCreateTableSQL():
                 password varchar(32),
                 createTime timestamp default(0),
                 lastLoginDate timestamp default(0),
+                lastModifyTime timestamp default 0,
                 helpInt integer,
                 helpText text
             )""" % _kUserTableName;
@@ -213,66 +215,104 @@ class DataManager(JxdSqlDataBasic):
 #public function - Catalog
     def getCatalogByPath(self, aPath):
         "根据路径,获取目录信息,不存在返回None"
-        return self.select(_kCatalogTableName, {"path": aPath});
+        return self.select(_kCatalogTableName, {"path": os.path.abspath(aPath)});
 
     def getCatalogById(self, aId):
         "根据Id,获取目录信息,不存在返回None"
         return self.select(_kCatalogTableName, {"id": aId});
 
-    def getCatalogWithRootAndId(self, aRootCatalogIds, aId):
-        """获取指定 Id 的目录信息
+    def getCatalogByIdAndRootIds(self, aId, aRootIds):
+        "获取指定 Id 的目录信息"
+        return self.select(_kCatalogTableName, {"id": aId, (lambda :"rootId in ({})".format(aRootIds)): None})
 
-        :aRootCatalogIds: 所有目录 ID
-        :aId: 目录 Id
-        """
-        sql = "select * from %s where id=? and rootId in(%s)" % (_kCatalogTableName, aRootCatalogIds);
-        return self.fetch(sql, (aId,));
-
-
-    def getCatalogs(self, aRootIds, aParentIds):
-        "使用 setlect in 方式获取目录信息, 参数以 1,9,10 传递"
-        if aRootIds is None and aParentIds is None:
-            return None;
-        strWhere = "parentId in (%s)" % aParentIds if aParentIds else "";
-        if aRootIds:
-            if len(strWhere) > 0:
-                strWhere += " and ";
-            strWhere += " rootId in (%s)" % aRootIds;
-        sql = "select * from %s where %s" %(_kCatalogTableName, strWhere);
-        # print(sql);
-        return self.fetch(sql, None, False);
+    def getCatalogsByParentIds(self, aParentIds, aRootIds):
+        "获取在RootIds下的所有aParentIds数据"
+        where = {}
+        if aRootIds != None:
+            where[lambda :"rootId in ({})".format(aRootIds)] = None
+        if aParentIds != None:
+            where[lambda :"parentId in ({})".format(aParentIds)] = None
+        return self.select(_kCatalogTableName, where, aOneRecord=False)
 
     def getCatalogState(self, aId):
-        "获取指定目录的子目录数量,文件数量; 此SQL语句后续可优化,与getCatalogs一起查询出来"
+        "获取指定目录的子目录数量,文件数量; 此SQL语句后续可优化,与getCatalogsByParentIds一起查询出来"
         return self.fetch("""select * from
                                 (select count(1) from catalog where parentid==?),
                                 (select count(1) from files where catalogid==?)
                 """, (aId, aId));
 
+    def makeCatalog(self, aCatalogInfo):
+        """创建目录,aCatalogInfo["path"] 必须存在
+        若已存在目录,只则更新更新
+        若需要插入数据时:
+            rootId与parentId存在,则直接插入.此时外部必须确定提供的数据有效
+            否则,先查询其父目录,再根据情况插入
+        :returns: 指定目录的信息
 
-    def addCatelog(self, aPath, aRootId, aParentId, aName=None, \
-            aCreateTime=None, aHelpInt=None, aHelpText=None):
-        "新增目录信息,返回其ID,失败返回None"
-        if aCreateTime is None:
-            aCreateTime = time.time();
-        fv = {"path": aPath,
-              "rootId": aRootId, 
-              "parentId": aParentId,
-              "name": aName,
-              "createTime": aCreateTime,
-              "lastModifyTime": time.time(),
-              "helpInt": aHelpInt,
-              "helpText": aHelpText};
-        nId = self.insert(_kCatalogTableName, fv);
-        if aRootId == -1:
-            self.update(_kCatalogTableName, {"id": nId}, {"rootId": nId});
-        return nId;
+        """
+        strPath = aCatalogInfo["path"]
+        row = self.getCatalogByPath(strPath)
+        nId = None
+        if row:
+            nId = row[kCatalogFieldId]
+            aCatalogInfo.pop("path")
+            aCatalogInfo.pop("rootId", None)
+            aCatalogInfo.pop("parentId", None)
+            self.updateCatalog(nId, aCatalogInfo, None)
+        else:
+            strPath = os.path.abspath(strPath)
+            aCatalogInfo["path"] = strPath
+            nParentId = aCatalogInfo.get("parentId")
+            nRootId = aCatalogInfo.get("rootId")
+            if nParentId == None or nRootId == None:
+                pci = None
+                if nParentId == None:
+                    parentPath = os.path.dirname(strPath)
+                    pci = self.getCatalogByPath(parentPath)
+                else:
+                    pci = self.getCatalogById(nParentId)
+                aCatalogInfo["parentId"] = pci[kCatalogFieldId] if pci else -1
+                aCatalogInfo["rootId"] = pci[kCatalogFieldRootId] if pci else -1
 
-    def updateCatelog(self, aId, aName=None, aHelpInt=None, aHelpText=None):
-        "更新目录附带信息"
-        fv = {"name": aName, "helpInt": aHelpInt, "helpText": aHelpText};
-        afv = {"lastModifyTime": time.time()};
-        return self.update(_kCatalogTableName, {"id": aId}, fv, afv);
+            nId = self.insert(_kCatalogTableName, aCatalogInfo)
+        result = self.select(_kCatalogTableName, {"id": nId})
+        if result and result[kCatalogFieldRootId] == -1:
+            result = list(result)
+            result[kCatalogFieldRootId] = nId
+            self.update(_kCatalogTableName, {"id": nId}, {"rootId": nId})
+        return result
+
+    def updateCatalog(self, aId, aCatalogInfo, aRootIds):
+        "更新目录信息, 若需要修改 parentId, 则可能需要修改rootId和所对应的File的rootCatalogId"
+        bUpdateFileTable = False
+        nNewRootId = None
+        if aRootIds != None:
+            # 只有传递 rootids 信息时,才进行修改(客户端才需要传递)
+            nNewParentId = aCatalogInfo.get("parentId")
+            if nNewParentId != None:
+                row = self.select(_kCatalogTableName, {
+                    (lambda :"id in ({},{})".format(aId, nNewParentId)): None,
+                    (lambda :"rootId in ({})".format(aRootIds)): None}, aOneRecord=False)
+                if row != None and len(row) == 2:
+                    nOldRootId = row[0][kCatalogFieldRootId]
+                    nNewRootId = row[1][kCatalogFieldRootId]
+                    if nOldRootId != nNewRootId:
+                        bUpdateFileTable = True
+                        aCatalogInfo["rootId"] = nNewRootId
+                else:
+                    return False
+
+        #更新Catalog表
+        afv = None;
+        if aCatalogInfo.get("lastModifyTime") == None:
+            afv = {"lastModifyTime": time.time()};
+        bOK = self.update(_kCatalogTableName, {"id": aId,
+            (lambda :"rootId in ({})".format(aRootIds) if aRootIds != None else None): None}, aCatalogInfo, afv);
+
+        #更新File表
+        if bOK and bUpdateFileTable:
+            bOK = self.update(_kFileTableName, {"catalogId": aId}, {"rootCatalogId": nNewRootId})
+        return bOK
 
     def checkUpdateCatelogRootInfo(self, aUserId):
         "判断指定的用户的根目录是否需要更新"
@@ -291,6 +331,43 @@ class DataManager(JxdSqlDataBasic):
                 self.update(_kFileTableName, {"rootCatalogId": rootId}, 
                         {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
 
+    def deleteCatalogs(self, aIds, aRootIds):
+        "删除指定目录"
+        if aIds == None or aRootIds == None:
+            return
+        rows = self.select(_kCatalogTableName, {(lambda :"rootId in ({})".format(aRootIds)): None,
+            (lambda :"id in ({})".format(aIds)): None,
+            (lambda :"parentId != -1"): None}, aOneRecord=False)
+
+        self._loopDeleteCatalogRecords(rows)
+        for item in rows:
+            path = item[kCatalogFieldPath]
+            # 使用 shell 删除
+            import subprocess
+            subprocess.Popen("rm -rf '{}'".format(path), shell=True)
+
+
+    def _loopDeleteCatalogRecords(self, aParentRows):
+        "递归删除指定目录的子目录与相关文件的数据库记录"
+        if not aParentRows or len(aParentRows) == 0:
+            return
+        cids = ""
+        for item in aParentRows:
+            nid = item[kCatalogFieldId]
+            if len(cids) > 0:
+                cids += ",{}".format(nid)
+            else:
+                cids = "{}".format(nid)
+
+        # 删除文件
+        self.delete(_kFileTableName, {(lambda :"catalogId in ({})".format(cids)): None})
+
+        # 删除信息
+        self.delete(_kCatalogTableName, {(lambda :"id in ({})".format(cids)): None})
+
+        # 删除子目录
+        rows = self.select(_kCatalogTableName, {(lambda :"parentId in ({})".format(cids)): None}, aOneRecord=False)
+        self._loopDeleteCatalogRecords(rows)
 
 
 #public function - File
@@ -391,7 +468,7 @@ class DataManager(JxdSqlDataBasic):
             strOrder = strOrder % ("width %s, height" % strOrderMethod);
         else:
             strOrder = "";
-        
+
         sqlTypes = "";
         if aStrTypes:
             sqlTypes = " and type in ({}) ".format(aStrTypes);
@@ -434,31 +511,82 @@ class DataManager(JxdSqlDataBasic):
         return rows;
 
 #public function - help info
+    def _buildHelpQueryInfo(self, aTableType, aRecordId, aStrRootIds=None):
+        where = {"id": aRecordId}
+        strTableName = None
+        if aTableType == 0:
+            # 用户表
+            strTableName = _kUserTableName
+        elif aTableType == 1:
+            # 目录表
+            where[lambda :"rootId in (?)"] = aStrRootIds
+            strTableName = _kCatalogTableName
+        else:
+            where[lambda :"rootCatalogId in (?)"] = aStrRootIds
+            strTableName = _kFileTableName
+        return strTableName, where
+
     def getHelpInfo(self, aTableType, aRecordId, aStrRootIds=None):
         "从不同的表中获取不同的HelpInfo信息"
-        strFields = "helpInt, helpText";
-        if aTableType == 0:
-            return self.select(_kUserTableName, {"id": aRecordId}, strFields)
-        else:
-            strTableName = _kCatalogTableName if aTableType == 1 else _kFileTableName;
-            sql = "select {fileds} from {table} where rootCatalogId in({rootIds}) and id=?".format(
-                    fileds=strFields, table=strTableName, rootIds=aStrRootIds);
-            return self.fetch(sql, (aRecordId));
+        strTableName, where = self._buildHelpQueryInfo(aTableType, aRecordId, aStrRootIds)
+        return self.select(strTableName, where, "helpInt, helpText, lastModifyTime")
 
     def setHelpInfo(self, aTableType, aRecordId, aHelpInt, aHelpText, aStrRootIds=None):
         "设置不同表记录的HelpInfo信息"
-        if aStrTypes == 0:
-            self.update(_kUserTableName, {"id": aRecordId}, {"helpInt": aHelpInt, "helpText": aHelpText})
-        else:
-            strTableName = _kCatalogTableName if aTableType == 1 else _kFileTableName;
-            sql = "update {table} set helpInt=?, helpText=? where rootCatalogId in({rootIds}) and id=?".format(
-                    table=strTableName, rootIds=aStrRootIds);
-            self.execute(sql, (aHelpInt, aHelpText, aRecordId));s
+        strTableName, where = self._buildHelpQueryInfo(aTableType, aRecordId, aStrRootIds)
+        self.update(strTableName, where, {"helpInt": aHelpInt, "helpText": aHelpText}, 
+                {"lastModifyTime": time.time()})
+
+#private function
+    def _makeValue(self, aDict, aKey, aDefaultValue):
+        v = aDict.get(aKey)
+        if v == None:
+            aDict[aKey] = aDefaultValue
+
+
+
+#help function - global
+def buildUserInfo(aUserRow):
+    "根据用户表信息生成发送给客户端的userInfo"
+    userInfo = {"name": aUserRow[kUserFieldName],
+            "createTime": aUserRow[kUserFieldCreateTime],
+            "lastLoginDate": aUserRow[kUserFieldLastLoginDate],
+            "lastModifyTime": aUserRow[kUserFieldLastModifyTime],
+            "helpInt": aUserRow[kUserFieldHelpInt],
+            "helpText": aUserRow[kUserFieldHelpText]};
+    unit.filterNullValue(userInfo)
+    return userInfo
+
+def buildCatalogInfo(aCatalogRow, aDbObject):
+    "根据数据库查询到的信息生成发送给客户端的catalogInfo"
+    strName = aCatalogRow[kCatalogFieldName]
+    if strName is None:
+        strName = aCatalogRow[kCatalogFieldPath]
+        strName = os.path.basename(strName)
+    cid = aCatalogRow[kCatalogFieldId]
+    catalogInfo = {"id": cid,
+        "rootId": aCatalogRow[kCatalogFieldRootId],
+        "parentId": aCatalogRow[kCatalogFieldParentId],
+        "name": strName,
+        "createTime": aCatalogRow[kCatalogFieldCreateTime],
+        "lastModifyTime": aCatalogRow[kCatalogFieldLastModifyTime],
+        "memo": aCatalogRow[kCatalogFieldMemo],
+        "helpInt": aCatalogRow[kCatalogFieldHelpInt],
+        "helpText": aCatalogRow[kCatalogFieldHelpText]}
+    if aDbObject:
+        subStates = aDbObject.getCatalogState(cid)
+        if subStates and len(subStates) > 1:
+            catalogInfo["subCatalogCount"] = subStates[0]
+            catalogInfo["fileCount"] = subStates[1]
+    unit.filterNullValue(catalogInfo)
+    return catalogInfo
 
 if __name__ == "__main__":
     print("begin test")
-    db = DataManger();
-    db.makeUser("TestName", "pw1223")
-    print(db.getUser("TestName", "aa"))
-    print(db.getUser("TestName", "pw1223"))
+    db = DataManager()
+    db.updateCatalog(9, {"parentId": 1, "name": "moveTest"}, "1")
+    # db.deleteCatalogs("3, 4,5", "1,2,3")
+    # db.makeCatalog({"path": "/A/B/1"})
+    # db.makeCatalog({"path": "/a/b/"})
+    # print(db.makeCatalog({"path": "/A/c/a/b/c", "parentId":4, "helpInt": "123"}))
     print("finished")

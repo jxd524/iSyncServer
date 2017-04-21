@@ -9,6 +9,8 @@
 __author__="Terry<jxd524@163.com>"
 
 import os, subprocess, json
+import datetime
+import hashlib
 from PIL import Image
 import defines, configs
 
@@ -137,5 +139,60 @@ def generateThumbailImage(aRootId, aPathId, aFileId, aInputFile, aOrgWidth, aOrg
         strOutFile = None;
     return strOutFile;
 
+def filterNullValue(aDict):
+    "过滤空值"
+    removeKeys = [];
+    for key,value in aDict.items():
+        if value is None:
+            removeKeys.append(key);
+    for key in removeKeys:
+        aDict.pop(key);
+
+
+def checkParamForInt(aParam):
+    "检查是否为Int"
+    try:
+        return int(aParam)
+    except Exception as e:
+        return None
+
+def checkParamForIntList(aParam):
+    "检查是否为一个Int的列表: 1, 2, 4"
+    try:
+        intList = list(map(int, aParam.split(",")))
+        if len(intList) > 0:
+            return aParam
+    except Exception as e:
+        pass
+    return None
+
+def checkParamForDatetime(aParam):
+    "检查是否可转成Datetime对象"
+    try:
+        return datetime.datetime.fromtimestamp(float(aParam))
+    except Exception as e:
+        pass
+    return None
+
+def makeUserCreateCatalogPath(aParentPath, aName):
+    "用户创建目录时生成路径"
+    nRandom = 123
+    while True:
+        nRandom += 8
+        strDirName = "{}{}{}".format(datetime.datetime.now(), nRandom, aName)
+        md5 = hashlib.md5()
+        md5.update(strDirName.encode("utf8"))
+        strDirName = md5.hexdigest()
+        strPath = os.path.join(aParentPath, strDirName)
+        if not os.path.isdir(strPath):
+            break
+    try:
+        os.makedirs(strPath)
+        return strPath
+    except Exception as e:
+        print(e)
+    return None
+
 if __name__ == "__main__":
-    print("finished");
+    makeUserCreateCatalogPath("/Users/terry/work/temp", "my./Test")
+    makeUserCreateCatalogPath("/Users/terry/work/temp", "my./Test")

@@ -66,8 +66,9 @@ class ScanDisk(object):
         #处理根目录
         scanDirList = []; #元素: (rootId, pathId, fullPath)
         for path in self.rootPaths:
-            nRootId = self.__makeCatelog(path, -1, -1, scanDirList);
-            self.rootPathIds.append(nRootId);
+            info = self._makeCatalog(path, scanDirList)
+            if info[dataManager.kCatalogFieldParentId] == -1:
+                self.rootPathIds.append(info[dataManager.kCatalogFieldRootId]);
 
         #扫描目录
         while len(scanDirList) > 0:
@@ -76,7 +77,7 @@ class ScanDisk(object):
                 nRootId = item[0];
                 nPathId = item[1];
                 strPath = item[2];
-                self.__scanPath(nRootId, nPathId, strPath, subDirList);
+                self._scanPath(nRootId, nPathId, strPath, subDirList);
             scanDirList = subDirList;
 
         #关联用户
@@ -94,21 +95,17 @@ class ScanDisk(object):
         self.__scaning = False;
 
 #prinvate function
-    def __makeCatelog(self, aPath, aRootId, aParentId, aDirList):
+    def _makeCatalog(self, aPath, aDirList, aRootId = None, aParentId = None):
         "确保路径写入数据库,存在则查询,不存在则插入"
-        info = self.dbManager.getCatalogByPath(aPath);
-        if info is None:
-            nId = self.dbManager.addCatelog(aPath, aRootId, aParentId);
-            info = self.dbManager.getCatalogById(nId);
-        nRootId = info[dataManager.kCatalogFieldRootId];
-        nPathId = info[dataManager.kCatalogFieldId];
-        if nRootId == -1:
-            nRootId = nPathId;
-        aDirList.append((nRootId, nPathId, aPath));
-        return nRootId;
+        info = self.dbManager.makeCatalog({"path": aPath, "rootId": aRootId, "parentId": aParentId})
+        nRootId = info[dataManager.kCatalogFieldRootId]
+        nPathId = info[dataManager.kCatalogFieldId]
+        aPath = info[dataManager.kCatalogFieldPath]
+        aDirList.append((nRootId, nPathId, aPath))
+        return info;
 
     #扫描指定目录下的文件及子目录,写入到数据库中
-    def __scanPath(self, aRootId, aPathId, aPath, subDirs):
+    def _scanPath(self, aRootId, aPathId, aPath, aSubDirs):
         """扫描指定的路径,此路径已经加入到数据中了
 
         :aPath: 路径
@@ -122,34 +119,34 @@ class ScanDisk(object):
             strFullFileName = os.path.join(aPath, item);
             if os.path.isdir(strFullFileName):
                 "文件夹"
-                if not self.__filterPath(strFullFileName):
-                    self.__makeCatelog(strFullFileName, aRootId, aPathId, subDirs);
+                if not self._filterPath(strFullFileName):
+                    self._makeCatalog(strFullFileName, aSubDirs, aRootId, aPathId);
             elif os.path.isfile(strFullFileName):
                 "文件"
-                if not self.__filterFile(strFullFileName):
-                    self.__addFileToDb(strFullFileName, aRootId, aPathId);
+                if not self._filterFile(strFullFileName):
+                    self._addFileToDb(strFullFileName, aRootId, aPathId);
 
 
     #过滤不需要加入数据库的文件
-    def __filterPath(self, aPath):
+    def _filterPath(self, aPath):
         """过滤不扫描的路径
 
         :aPath: 路径
         :returns: True表示不扫描此目录
 
         """
-        return self.__defaultFilter(aPath);
+        return self._defaultFilter(aPath);
 
-    def __filterFile(self, aFilePathName):
+    def _filterFile(self, aFilePathName):
         """过滤不扫描的文件
 
         :aFilePathName: 文件名, 全路径
         :returns: True表示不处理此文件
 
         """
-        return self.__defaultFilter(aFilePathName);
+        return self._defaultFilter(aFilePathName);
 
-    def __defaultFilter(self, aPath):
+    def _defaultFilter(self, aPath):
         """默认过滤函数: 以.开头的不扫描入数据库
 
         :aPath: 路径
@@ -165,7 +162,7 @@ class ScanDisk(object):
 
 #DB operation
     #将文件添加到数据库, 无返回值
-    def __addFileToDb(self, aFileName, aRootId, aPathId):
+    def _addFileToDb(self, aFileName, aRootId, aPathId):
         strName = os.path.split(aFileName)[1];
         if self.dbManager.getFileByCatalogId(aPathId, strName):
             return;
@@ -235,7 +232,7 @@ class ScanDisk(object):
 
 def main():
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "i:");
+        opts, args = getopt.getopt(sys.argv[1:], "i:p:");
     except Exception as e:
         print(e);
         return;
@@ -249,6 +246,10 @@ def main():
                 #根据配置文件来扫描数据
                 scanByJsonFile(value);
                 return;
+            elif op == "-p":
+                #扫描指定路径,一般用于增量扫描
+                beginScan((value,), None)
+
 
 def scanByJsonFile(aJsonFileName):
     "根据配置文件扫描数据"
@@ -297,7 +298,4 @@ def makeUsers(aDataManager, aUsers):
 
 if __name__ == "__main__":
     main();
-    # paths = ["/Users/terry/temp/"];
-    # users = [{"name": "terry", "password": "123123"}];
-    # beginScan(paths, users);
 

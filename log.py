@@ -29,7 +29,7 @@ def instanceForFile(aFileName = "/tmp/JxLog.log", aMaxFileSize = 1024 * 1024 * 5
     frm =logging.Formatter("%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s");
     fh = RotatingFileHandler(aFileName, "a", aMaxFileSize, aMaxFileCount);
     fh.setFormatter(frm);
-    fh.setLevel(logging.INFO);
+    fh.setLevel(logging.WARNING);
     ch = logging.StreamHandler();
     ch.setFormatter(frm);
     log = logging.getLogger("app");
@@ -38,10 +38,13 @@ def instanceForFile(aFileName = "/tmp/JxLog.log", aMaxFileSize = 1024 * 1024 * 5
     log.addHandler(ch);
     return log;
 
+__gLogObject = None
 def logObject():
     "日记对象"
-    return instanceForFile(configs.logFileName());
-
+    global __gLogObject
+    if not __gLogObject:
+        __gLogObject = instanceForFile(configs.logFileName())
+    return __gLogObject
 
 if __name__ == "__main__":
     logObject().log(logging.DEBUG, "this is Test");

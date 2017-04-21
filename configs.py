@@ -4,13 +4,14 @@
 """
 应用程序配置
 
-application config
+application configs
 """
 
 __author__ = "Terry<jxd524@163.com>";
 
 import json
 import os,sys
+import log
 
 __gLogFileName = None;
 def logFileName():
@@ -35,31 +36,36 @@ def thumbPath():
     return __gThumbPath;
 
 __gDefaultUserPath = "*";
-def defaultUserPath():
+def defaultUserPath(aUserName, aUserId):
     """
     用户默认路径
     user default path
     """
-    global __gDefaultUserPath;
+    global __gDefaultUserPath
     if __gDefaultUserPath == "*":
-        __gDefaultUserPath = AppConfig().defaultUserPath;
-    return __gDefaultUserPath;
+        __gDefaultUserPath = AppConfig().defaultUserPath
+    strPathName = "{}_{}".format(aUserName, aUserId)
+    defPath = os.path.join(__gDefaultUserPath, strPathName)
+    if not os.path.isdir(defPath):
+        log.logObject().info("create path: {}".format(defPath))
+        os.makedirs(defPath)
+    return defPath
 
 def shareUrlSetting():
     """
     分享URL缓存配置
     cache setting of share url
     """
-    config = AppConfig();
-    return (config.shareUrlThreshold, config.shareUrlTimeout);
+    configs = AppConfig();
+    return (configs.shareUrlThreshold, configs.shareUrlTimeout);
 
 def onlineSetting():
     """
     在线人数缓存配置
     cache setting of online users count
     """
-    config = AppConfig();
-    return (config.onlineThreshold, config.onlineTimeout);
+    configs = AppConfig();
+    return (configs.onlineThreshold, configs.onlineTimeout);
 
 
 
@@ -70,62 +76,62 @@ class AppConfig(object):
 
 #print lifecycle
     def __init__(self):
-        strFileName = os.path.join(sys.path[0], "appConfig.json");
+        strFileName = os.path.join(sys.path[0], "appConfigs.json");
         try:
             with open(strFileName, "r") as f:
                 self.__config = json.load(f);
         except Exception as e:
-            print(e);
+            print("没有配置文件,将使用默认值");
 
 #property
     @property
     def logFileName(self):
         "日记位置"
-        return self.__getPath("logFileName", "appLog.log", False);
+        return self.__getPath("logFileName", "appLog.log", False)
 
     @property
     def thumbPath(self):
         "缩略图总位置"
-        return self.__getPath("thumbPath", "syncThumbPath", True);
+        return self.__getPath("thumbPath", "thumbs", True)
 
     @property
     def defaultUserPath(self):
         "用于创建默认的用户目录"
-        return self.__getPath("defaultUserPath", None, True);
+        return self.__getPath("defaultUserPath", "users", True)
 
     @property
     def onlineThreshold(self):
         "在线极值人数,用于缓存在线用户的关键信息"
-        return self.__getValue("onlineThreshold", 100);
+        return self.__getValue("onlineThreshold", 100)
 
     @property
     def onlineTimeout(self):
         "在线用户最大无活动时间"
-        return self.__getValue("onlineTimeout", 3600);
+        return self.__getValue("onlineTimeout", 3600)
 
     @property
     def shareUrlThreshold(self):
         "分享URL最大极值"
-        return self.__getValue("shareUrlThreshold", 100);
+        return self.__getValue("shareUrlThreshold", 100)
 
     @property
     def shareUrlTimeout(self):
         "分享URL有效时间"
-        return self.__getValue("shareUrlTimeout", 1800);
+        return self.__getValue("shareUrlTimeout", 1800)
 
 #private function
     def __getPath(self, aNodeName, aDefaultValue, aForPath):
         try:
-            result = self.__config.get(aNodeName);
+            result = self.__config.get(aNodeName)
         except Exception as e:
-            result = None;
+            result = None
 
         if (result is None or len(result) == 0) and aDefaultValue:
-            result = os.path.join(sys.path[0], "config");
-            result = os.path.join(result, aDefaultValue);
+            result = os.path.join(sys.path[0], "building")
+            result = os.path.join(result, aDefaultValue)
 
         # make sure the path is exists
-        strPath = result if aForPath else os.path.split(result)[0];
+        strPath = result if aForPath else os.path.split(result)[0]
         if not os.path.isdir(strPath):
             os.makedirs(strPath)
 
@@ -133,14 +139,14 @@ class AppConfig(object):
 
     def __getValue(self, aNodeName, aDefaultValue):
         try:
-            result = self.__config.get(aNodeName);
+            result = self.__config.get(aNodeName)
         except Exception as e:
-            result = None;
+            result = None
 
         if result is None:
-            result = aDefaultValue;
+            result = aDefaultValue
 
-        return result;
+        return result
 
 if __name__ == "__main__":
     s = "/Users/terry/work/terry/iSyncServer/appConfig.json";

@@ -1,3 +1,15 @@
+---
+layout: post
+title:  "iSync文件管理服务器版本"
+author: Terry
+date:   2017-04-18 11:14
+categories: python
+excerpt: iSync iPrivate 文件管理 同步 云盘
+---
+
+* content
+{:toc}
+
 # 目标与简单说明
 
 文件管理系统.
@@ -5,10 +17,9 @@
 
 1. 服务器实现: flask + python.
     以HTTP协议实现JSON数据格式的API接口
-    服务端先扫描指定的路径,将文件扫描到数据库中.后续的API请求,服务器都是直接从数据库读取数据的
-    需要安装的库: ffmpeg, Pillow
-    ffmpeg: 用于获取媒体的信息,生成视频缩略图
-    Pillow: 用于生成图片的缩略图(用ffmepg来生成图片的缩略图,某些图片格式生成的图片与原图不一致)
+    若服务端需要扫描已有数据,则需要安装库: ffmpeg, Pillow
+        ffmpeg: 用于获取媒体的信息,生成视频缩略图
+        Pillow: 用于生成图片的缩略图(用ffmepg来生成图片的缩略图,某些图片格式生成的图片与原图不一致)
 
 2. 客户端需要实现下文相关接口
 
@@ -16,18 +27,20 @@
 # 安装
 后续再作说明
 
-# 配置文件
-**appConfig.json**: 配置整个服务器的变量.以下内容有效
+# App配置文件
+若没有配置文件,则使用默认值
+**appConfigs.json**: 配置整个服务器的变量.以下内容有效
 
-**logFileName**: 日志存在路径,默认是 ./config/appLog.log
-**thumbPath**: 生成缩略图时存放的总路径,默认 ./config/syncThumbPath
-**defaultUserPath**: 默认的用户路径,只有当创建了用户,但此用户还没有一个目录时有效,默认为空,不会自动创建目录
+**logFileName**: 日志存在路径,默认是 ./building/appLog.log
+**thumbPath**: 生成缩略图时存放的总路径,默认 ./building/thumbs
+**defaultUserPath**: 默认的用户路径,只有当创建了用户,但此用户还没有一个目录时有效,默认 ./building/users
 **shareUrlThreshold**: 分享URL的最大数量,默认1000,
 **shareUrlTimeout**: 分享URL的最大缓存时间,默认1800, 单位:秒
 **onlineTimeout**: 在线人数极值,超过此值,则会进行超时处理,默认100
 **onlineTimeout**: 在线用户无活动保持的最大时间,默认 3600, 单位: 秒
 
-# 扫描数据
+# 扫描数据(附加功能)
+如果不想将已有文件加入到系统,可不理会此功能
 为方便处理磁盘数据,提供了 **scanDisk.py** 来扫描数据,具体参数见下表
 
 |参数名| 作用|
@@ -106,7 +119,13 @@ PS:
 
 ## 类型定义
 
-fileType: 媒体类型定义
+<span id="datetime">**datetime**</span>:包含日期与时间的类型. 
+1970到现在的秒数,如 2017-04-19 03:06:44 +0000  表示为: 1492571204.221604
+```json
+typedef datetime float
+```
+
+<span id="fileType">**fileType**</span>: 媒体类型定义
 
 ```basic
     Image   = 1 << 0;
@@ -116,26 +135,28 @@ fileType: 媒体类型定义
     File    = 1 << 4;
 ```
 
-HelpInfo定义: 记录自带的辅助信息,这些信息对服务器没有意义,只负责保存
+<span id="helpInfo">HelpInfo</span>定义: 记录自带的辅助信息,这些信息对服务器没有意义,只负责保存
 ```json
 {
     "helpInt": 12,
-    "helpText": "xxxx"
+    "helpText": "xxxx",
+    "lastModifyTime": 1480665083.080785
 }
 ```
 
-UserInfo定义: 用户信息
+<span id="userInfo">**UserInfo**</span>: 用户信息
 ```json
 {
     "name": "displayName",
     "createTime": 123123123.00,
     "lastLoginDate": 1480665083.080785,
+    "rootids": "1,5,10"
     "helpInt": 20,
     "helpText": "only for client"
 }
 ```
 
-CatalogInfo定义: 目录信息
+<span id="catalogInfo">**CatalogInfo**</span>: 目录信息
 ```json
 {
     "id": 123,
@@ -152,7 +173,7 @@ CatalogInfo定义: 目录信息
 }
 ```
 
-FileInfo定义: 文件信息
+<span id="fileInfo">**FileInfo**</span>: 文件信息
 ```json
 {
     "id": 123,
@@ -174,7 +195,7 @@ FileInfo定义: 文件信息
 }
 ```
 
-PageInfo定义: 分页信息
+<span id="pageInfo">**PageInfo**</span>: 分页信息
 ```json
 {
     "pageIndex": 0,
@@ -183,8 +204,9 @@ PageInfo定义: 分页信息
 }
 ```
 
+## 帐户相关接口
 
-## login.icc 登陆
+### login.icc 登陆
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -192,9 +214,9 @@ PageInfo定义: 分页信息
 | userName | string | 登陆名,区分大小写 |
 | password | string | 登陆密码 |
 |||
-| 响应Data | **UserInfo** |
+| 响应Data | **[UserInfo](#userInfo)** |
 
-## logout.icc 退出
+### logout.icc 退出
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -203,45 +225,90 @@ PageInfo定义: 分页信息
 |||
 | 响应Data | 无 |
 
-## getHelpInfo.icc 获取指定记录的辅助信息
+## HelpInfo 相关接口
 
-| 请求方法 | GET |
-| -------- | ---- |
-| 请求参数 | type | id |
-| 参数类型 | int | int |
-| 响应Data | **HelpInfo** |
-
-参数说明:
-**type**: 表示类型: 0->用户表; 1-> 目录表; 2->文件表
-
-## setHelpInfo.icc 设置指定记录的辅助信息
-
-| 请求方法 | POST |
-| -------- | ---- |
-| 请求参数 | type | id | helpInt | helpText |
-| 参数类型 | int | int | int | string |
-| 响应Data | 无 |
-
-参数说明:
-**type**: 表示类型: 0->用户表; 1-> 目录表; 2->文件表
-
-
-## catalogs.icc 获取指定目录下的信息
+### helpInfo.icc 获取指定记录的辅助信息
 
 | 请求方法 | GET |
 | -------- | --- |
-| 请求参数 | pids |
-| 响应Data | array of CatalogInfo |
+|||
+| 请求参数 | 类型 | 说明 |
+| type | int | 类型,在指定表查询, 0->用户表; 1->目录表; 2->文件表
+| id | int | 相关类型的id,用户表时不需要此值
+|||
+| 响应Data | **[HelpInfo](#helpInfo)** |
 
-参数说明:
-**pids**: 目录的父ID, -1表示要获取根目录.其它如 "1,2,3"
+### updateHelpInfo.icc 设置指定记录的辅助信息
 
-返回JSON的Data域
-```json
-[
-    CatalogInfoObject1, CatalogInfoObject2...
-]
-```
+| 请求方法 | POST |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| type | int | 类型,与getHelpInfo接口参数一致 |
+| id | int | 相关类型的id
+| helpInt | int | 辅助值(可选) |
+| helpText | string | 辅助值(可选) |
+|||
+| 响应Data | 无 |
+
+## 目录相关接口
+
+### catalogs.icc 获取指定目录下的信息
+
+| 请求方法 | GET |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| pids | string | 请求指定父类下所有目录的信息, 多个以","分隔, -1表示获取所有的根目录
+|||
+| 响应Data | array of **[CatalogInfo](#catalogInfo)** |
+
+### createCatalog.icc 创建目录
+| 请求方法 | POST |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| parentId | int | 父类Id |
+| name | string | 目录名称, 长度限制( 1 <= len < 100) |
+| createTime | [datetime](#datetime) | 创建时间,可选 |
+| lastModifyTime | [datetime](datetime) | 最后修改时间,可选 |
+| memo | string | 备注,可选 |
+| helpInt | int | 辅助信息,可选 |
+| helpText | string | 辅助信息,可选 |
+|||
+| 响应Data | **[CatalogInfo](#catalogInfo)** |
+
+### deleteCatalog.icc 删除目录
+| 请求方法 | POST |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| ids | string | 要删除的目录Id,以","分隔.不支持删除根目录.此操作会直接将指定目录下的所有文件,子目录都进行删除 |
+|||
+| 响应Data | "提示信息" |
+
+### updateCatalog.icc 更新目录信息
+| 请求方法 | POST |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| id | int | 将被更新目录 |
+| parentId | int | 目录移动到指定目录,此操作只修改数据库,不修改实际文件位置 |
+| name | string | 目录名称, 长度限制( 1 <= len < 100)(可选) |
+| memo | string | 备注,可选 |
+| helpInt | int | 辅助信息,可选 |
+| helpText | string | 辅助信息,可选 |
+|||
+| 响应Data | "提示信息" |
+
+
+
+
+
+
+
+
+
 
 
 ## 请求指定目录下的数据: files.icc
@@ -329,18 +396,6 @@ PageInfo定义: 分页信息
 | 响应内容 | 资源内容 |
 
 
-## 创建目录
-
-| 请求方法 | POST |
-| -------- | --- |
-|||
-| 请求参数 | 类型 | 说明 |
-| pid | int | 父目录ID |
-| name | string | 目录显示名称 |
-| helpInt | int | 可选, 辅助信息 |
-| helpText | string | 可选, 辅助信息 |
-|||
-| 响应Data | **CatalogInfo** |
 
 ## 上传文件信息
  

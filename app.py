@@ -7,7 +7,7 @@ __author__ = "Terry<jxd524@163.com>"
 flask 框架处理
 """
 
-import os
+import os, datetime
 import werkzeug
 from werkzeug import datastructures, secure_filename
 from flask import Flask, request, session, g, abort
@@ -17,9 +17,11 @@ import hashlib
 import dataManager, responseHelp, defines, unit, cache, configs
 from dataManager import DataManager
 from cache import LoginInfo
+from responseHelp import checkApiParam
+from responseHelp import kParamForResult, kParamForErrorResponse, kParamForErrorRealCode, \
+        kParamForLoginInfo, kParamForRequestParams
+# from log import logObject
 
-#登录用户有权限的目录ID
-kSessionUserKey = "Session_UserKey";
 
 app = Flask(__name__);
 app.secret_key = defines.kAppSecretKey;
@@ -29,8 +31,9 @@ def getDbManager():
     "按需获取数据库对象"
     db = getattr(g, "__dataManager", None);
     if db is None:
-        db = g.__dataManager = DataManager();
-    return db;
+        db = DataManager()
+        g.__dataManager = db
+    return db
 
 @app.teardown_request
 def teardown_request(exception):
@@ -38,30 +41,6 @@ def teardown_request(exception):
         g.__dataManager = None;
 
 #help function
-def getCurLoginInfo():
-    "获取当前登陆的用户缓存信息,若为None,表示未登陆"
-    key = session.get(kSessionUserKey);
-    return LoginInfo.GetObject(key);
-
-def getUserRootCatalogs(aUserId, aUserName):
-    "获取用户默认路径,返回目录ID"
-    db = getDbManager();
-    rootList = db.getUserRootCatalogs(aUserId);
-    if not rootList or len(rootList) == 0:
-        #无根目录
-        strPath = config.defaultUserPath();
-        try:
-            strPath = os.path.join(strPath, aUserName);
-            if not os.path.isdir(strPath):
-                os.makedirs(strPath);
-
-            nRootId = db.addCatelog(strPath, -1, -1);
-            if nRootId is not None:
-                db.makeUserAssociate(aUserId, nRootId);
-                rootList = (nRootId);
-        except Exception as e:
-            rootList = None;
-    return rootList;
 
 def getResOnResponse(aValideFileType, aForceStatusCode):
     """响应请求时调用,获取 id ,返回(fileName, errorResponse)
@@ -87,7 +66,7 @@ def getResOnResponse(aValideFileType, aForceStatusCode):
         bParamOK = False;
     if not bParamOK:
         nStatusCode = aForceStatusCode if aForceStatusCode else 416;
-        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ParamType,\
+        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param,\
                 statusCode=nStatusCode);
 
     #获取文件信息
@@ -127,101 +106,215 @@ def getResOnResponse(aValideFileType, aForceStatusCode):
     return strFileName, dbFile, None;
 
 # api define
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["POST"])
 def appHome():
     return("hello world");
 
-@app.route("/login.icc", methods=["POST"])
+@app.route("/login.icc", methods=["POST", "GET"])
 def appLogin():
     "登陆"
-    try:
-        js = request.get_json();
-        name = js["userName"];
-        password = js["password"];
-    except Exception as e:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ParamType);
+    result = checkApiParam(False, ["userName", "password"])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-    db = getDbManager();
-    row = db.getUser(name, password);
+    param = result[kParamForRequestParams]
+    db = getDbManager()
+    row = db.getUser(param["userName"], param["password"])
     if row is None:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_LoginNamePassword);
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_LoginNamePassword)
 
     #查询根目录信息
-    nUserId = row[dataManager.kUserFieldId];
-    strUserName = row[dataManager.kUserFieldName];
-    rootList = getUserRootCatalogs(nUserId, strUserName);
-    if rootList is None:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_NotSetRootPath);
+    nUserId = row[dataManager.kUserFieldId]
+    strUserName = row[dataManager.kUserFieldName]
+    rootIdList = db.getUserRootCatalogs(nUserId);
+    if not rootIdList or len(rootIdList) == 0:
+        #无根目录
+        strPath = configs.defaultUserPath(strUserName, nUserId)
+        if not os.path.isdir(strPath):
+            logObject().error("user: {} do not set root path".format(nUserId))
+            return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_NotSetRootPath)
+
+        ci = db.makeCatalog({"path": strPath})
+        nRootId = ci[dataManager.kCatalogFieldRootId] if ci else None
+        if nRootId == None:
+            logObject().error("can not add root catelog: {} for user: {}".format(strPath, nUserId))
+            return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError)
+
+        db.makeUserAssociate(nUserId, nRootId);
+        rootIdList = (nRootId);
 
 
     #登录成功,写入session信息
-    key = LoginInfo.MakeObject(nUserId, rootList);
-    session[kSessionUserKey] = key;
+    key = LoginInfo.MakeObject(nUserId, rootIdList);
+    session[defines.kSessionUserKey] = key;
 
-    #返回用户信息
-    ltData = {"name": strUserName,
-            "createTime": row[dataManager.kUserFieldCreateTime],
-            "lastLoginDate": row[dataManager.kUserFieldLastLoginDate]};
-    return responseHelp.buildSuccessResponseData(ltData);
+    return responseHelp.buildSuccessResponseData(dataManager.buildUserInfo(row))
 
 @app.route("/logout.icc", methods=["POST"])
 def appLogout():
     "退出"
-    loginInfo = getCurLoginInfo();
-    if loginInfo:
-        LoginInfo.DeleteObject(session[kSessionUserKey]);
+    key = session.get(defines.kSessionUserKey)
+    user = LoginInfo.GetObject(key)
+    if user:
+        LoginInfo.DeleteObject(key)
         session.clear();
     return responseHelp.buildSuccessResponseData("");
 
-@app.route("/catalogs.icc")
-def appGetCatalogs():
-    """app 获取指定目录下的子目录信息
-    参数 :
-    pids: 以","分隔的数字: 1,2,5之类的
-    """
-
-    # 登陆判断
-    loginInfo = getCurLoginInfo();
-    if loginInfo is None:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NeedLogin);
+@app.route("/helpInfo.icc", methods=["GET"])
+def appGetHelpInfo():
+    "获取指定记录的辅助信息"
 
     # 参数判断
-    bParamOK = False;
-    try:
-        strIds = request.values["pids"];
-        bParamOK = appUnit.checkMultiStrNumbers(strIds);
-    except Exception as e:
-        pass;
-    if not bParamOK:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ParamType);
+    result = checkApiParam(True, [
+        {"name": "type", "checkfunc": unit.checkParamForInt},
+        {"name": "id", "checkfunc": unit.checkParamForInt, "default": -1}])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-    # 查询数据
-    db = getDbManager();
-    dbItems = db.getCatalogs(loginInfo.rootIdsString, strIds);
+    userLoginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nType = param["type"]
+    nId = userLoginInfo.userId if nType == 0 else param["id"]
+    if nType not in (0, 1, 2) or nId <= 0:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+
+    # 查询并返回数据
+    db = getDbManager()
+    hi = db.getHelpInfo(nType, nId, userLoginInfo.rootIdsString)
+    nLen = len(hi) if hi else 0
+    ltData = {"helpInt": hi[0] if nLen > 0 else None,
+              "helpText": hi[1] if nLen > 1 else None,
+              "lastModifyTime": hi[2] if nLen > 2 else None}
+    unit.filterNullValue(ltData)
+    return responseHelp.buildSuccessResponseData(ltData)
+
+@app.route("/updateHelpInfo.icc", methods=["POST"])
+def appSetHelpInfo():
+    "设置指定记录的辅助信息"
+
+    # 参数判断
+    result = checkApiParam(True, [
+        {"name": "type", "checkfunc": unit.checkParamForInt},
+        {"name": "id", "checkfunc": unit.checkParamForInt, "default": -1},
+        {"name": "helpInt", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "helpText", "default": None}])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    userLoginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nType = param["type"]
+    nId = userLoginInfo.userId if nType == 0 else param["id"]
+    if nType not in (0, 1, 2) or nId <= 0:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+    nHelpId = param["helpInt"]
+    strHelpText = param["helpText"]
+
+    # 设置
+    if nHelpId != None or strHelpText != None:
+        db = getDbManager()
+        db.setHelpInfo(nType, nId, nHelpId, strHelpText, userLoginInfo.rootIdsString)
+        return responseHelp.buildSuccessResponseData(None)
+    return responseHelp.buildErrorResponseData(kCmdUserError_Param)
+
+
+@app.route("/catalogs.icc", methods=["GET"])
+def appGetCatalogs():
+    "获取指定目录下的子目录信息"
+
+    # 参数判断
+    result = checkApiParam(True, [{"name": "pids", "checkfunc": unit.checkParamForIntList}])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    strParentIds = result[kParamForRequestParams]["pids"]
+
+    # 查询数据 
+    db = getDbManager()
+    dbItems = db.getCatalogsByParentIds(strParentIds, loginInfo.rootIdsString)
 
     #生成数据
     ltData = [];
     for item in dbItems:
-        strName = item[dataManager.kCatalogFieldName];
-        if strName is None:
-            strName = item[dataManager.kCatalogFieldPath];
-            strName = os.path.basename(strName);
-        cid = item[dataManager.kCatalogFieldId];
-        # print(cid);
-        subStates = db.getCatalogState(cid);
-        catalogItem = {"id": cid,
-            "rootId": item[dataManager.kCatalogFieldRootId],
-            "parentId": item[dataManager.kCatalogFieldParentId],
-            "name": strName,
-            "createTime": item[dataManager.kCatalogFieldCreateTime],
-            "lastModifyTime": item[dataManager.kCatalogFieldLastModifyTime],
-            "helpInt": item[dataManager.kCatalogFieldHelpInt],
-            "helpText": item[dataManager.kCatalogFieldHelpText],
-            "subCatalogCount": subStates[0],
-            "fileCount": subStates[1]};
-        appUnit.filterNullValue(catalogItem);
-        ltData.append(catalogItem);
-    return responseHelp.buildSuccessResponseData(ltData);
+        ltData.append(dataManager.buildCatalogInfo(item, db))
+    return responseHelp.buildSuccessResponseData(ltData)
+
+@app.route("/createCatalog.icc", methods=["POST"])
+def appCreateCatalog():
+    "创建目录"
+    curDateTime = datetime.datetime.now()
+    result = checkApiParam(True, [
+        {"name": "parentId", "checkfunc": unit.checkParamForInt},
+        {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None},
+        {"name": "createTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "lastModifyTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "memo", "default": None},
+        {"name": "helpInt", "default": None},
+        {"name": "helpText", "default": None}])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+
+    #查询数据
+    db = getDbManager()
+    parentItem = db.getCatalogByIdAndRootIds(param["parentId"], loginInfo.rootIdsString)
+    if not parentItem:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_CatalogIdInValid)
+
+    #创建路径
+    strPath = unit.makeUserCreateCatalogPath(parentItem[dataManager.kCatalogFieldPath], param["name"])
+    if not strPath:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError)
+    param["path"] = strPath
+
+    item = db.makeCatalog(param)
+    return responseHelp.buildSuccessResponseData(dataManager.buildCatalogInfo(item, db))
+
+@app.route("/deleteCatalog.icc", methods=["POST"])
+def appDeleteCatalog():
+    "删除目录"
+    result = checkApiParam(True, [{"name": "ids", "checkfunc": unit.checkParamForIntList}])
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    db = getDbManager()
+    try:
+        db.deleteCatalogs(param["ids"], loginInfo.rootIdsString)
+        return responseHelp.buildSuccessResponseData("OK")
+    except Exception as e:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DeleteError)
+
+@app.route("/updateCatalog.icc", methods=["POST"])
+def appUpdateCatalog():
+    result = checkApiParam(True, [
+        {"name": "id", "checkfunc": unit.checkParamForInt},
+        {"name": "parentId", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None, "default": None},
+        {"name": "memo", "default": None},
+        {"name": "helpInt", "default": None},
+        {"name": "helpText", "default": None}]) 
+
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nId = param["id"]
+    param.pop("id")
+    db = getDbManager()
+    bOk = db.updateCatalog(nId, param, loginInfo.rootIdsString)
+    if bOk:
+        return responseHelp.buildSuccessResponseData("OK") 
+    else:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+
+
+
 
 @app.route("/files.icc", methods=["GET"])
 def appGetFiles():
@@ -255,7 +348,7 @@ def appGetFiles():
 
     if not bParamOK:
         print(strPathIds, nPageIndex, nMaxPerPage, strTypes, nSort);
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ParamType);
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
 
     # 查询数据
     db = getDbManager();
@@ -348,7 +441,7 @@ def appGetShareFile():
             #成功
             return responseHelp.sendFile(strFileName);
 
-    return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ParamType);
+    return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
 
 @app.route("/uploadFile.icc", methods=["POST"])
 def appUploadFile():
@@ -392,6 +485,10 @@ def appUploadFile():
         fileObject.save(strFullFileName);
     return "finished"
 
+def myTest(aInput):
+    return aInput
+def checkTest(aInput):
+    return True;
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", threaded=True, debug=True);
-    # app.run(debug=True);
