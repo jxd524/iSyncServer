@@ -10,7 +10,7 @@ __author__="Terry<jxd524@163.com>"
 import sqlite3
 
 class JxdSqlDataBasic(object):
-
+    _autoSave = True
 #lifecycle
     def __init__(self, aFileName):
         "初始化" 
@@ -18,9 +18,17 @@ class JxdSqlDataBasic(object):
 
     def __del__(self):
         "释放"
-        self.save();
+        if self.autoSave:
+            self.save();
         self.__conn.close();
         self.__conn = None;
+
+    @property
+    def autoSave(self):
+        return self._autoSave
+    @autoSave.setter
+    def autoSave(self, aValue):
+        self._autoSave = aValue
 
 #public 
     def connect(self):
@@ -46,9 +54,7 @@ class JxdSqlDataBasic(object):
             result = cur.fetchone() if fetchone else cur.fetchall();
             return result;
         except Exception as e:
-            print(e)
-            print(sql, aArgs)
-            raise e
+            print(e, sql, aArgs)
         finally:
             cur.close();
         return None
@@ -63,13 +69,10 @@ class JxdSqlDataBasic(object):
                 cur.execute(aSql);
             return True;
         except Exception as e:
-            print(e)
-            print(sql, aArgs)
-            raise e
+            print(e, sql, aArgs)
         finally:
             cur.close();
         return False;
-
 
     def select(self, aTableName, aWheres, aFields="*", aOneRecord=True):
         "查询数据"
@@ -81,9 +84,7 @@ class JxdSqlDataBasic(object):
             cur.execute(sql, values);
             return cur.fetchone() if aOneRecord else cur.fetchall();
         except Exception as e:
-            print(e)
-            print(sql, values)
-            raise e
+            print(e, sql, values)
         finally:
             cur.close();
         return None;
@@ -103,9 +104,7 @@ class JxdSqlDataBasic(object):
             nID = cur.lastrowid;
             return nID;
         except Exception as e:
-            print(e)
-            print(sql, values)
-            raise e
+            print(e, sql, values)
         finally:
             cur.close();
         return None;
@@ -129,9 +128,7 @@ class JxdSqlDataBasic(object):
             cur.execute(sql, values)
             return True;
         except Exception as e:
-            print(e)
-            print(sql, values)
-            raise e
+            print(e, sql, values)
         finally:
             cur.close();
         return False;
@@ -147,7 +144,7 @@ class JxdSqlDataBasic(object):
             cur.execute(sql, values);
             return True;
         except Exception as e:
-            raise e
+            print(sql, values)
         finally:
             cur.close();
         return False;

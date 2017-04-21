@@ -294,23 +294,25 @@ class DataManager(JxdSqlDataBasic):
             # 只有传递 rootids 信息时,才进行修改(客户端才需要传递)
             nNewParentId = aCatalogInfo.get("parentId")
             if nNewParentId != None:
-                row = self.select(_kCatalogTableName, 
-                        {formatInField("id", aId): None,
-                            formatInField("rootId", aLimitStrRootIds): None},
-                        aOneRecord=False)
-                if row != None and len(row) == 2:
-                    nNewRowIndex = 0 if row[0][kCatalogFieldId] == nNewParentId else 1
-                    nOldRowIndex = 0 if nNewRowIndex == 1 else 1
-                    nOldRootId = row[nOldRowIndex][kCatalogFieldRootId]
-                    nNewRootId = row[nNewRowIndex][kCatalogFieldRootId]
-                    if nOldRootId != nNewRootId:
-                        bUpdateFileTable = True
-                        aCatalogInfo["rootId"] = nNewRootId
-                else:
+                sql = """select a.rootId as newRootId, b.rootId as curRootid, b.parentId
+                    from {table} a, {table} b
+                    where a.id = ? and a.rootid in ({limitIds}) and
+                        b.id = ? and b.rootid in ({limitIds})
+                """.format(table = _kCatalogTableName, limitIds = aLimitStrRootIds)
+                row = self.fetch(sql, (nNewParentId, aId))
+                if not row:
                     return False
 
+                # 判断是否更新
+                if nNewParentId == row[2]:
+                    aCatalogInfo.pop("parentId")
+                elif row[0] != row[1]:
+                    bUpdateFileTable = True
+                    nNewRootId = row[0]
+                    aCatalogInfo["rootId"] = nNewRootId
+
         #更新Catalog表
-        afv = None;
+        afv = None; 
         if aCatalogInfo.get("lastModifyTime") == None:
             afv = {"lastModifyTime": time.time()};
         bOK = self.update(_kCatalogTableName, 
@@ -320,11 +322,11 @@ class DataManager(JxdSqlDataBasic):
 
         #更新File表
         if bOK and bUpdateFileTable:
-            bOK = self.update(_kFileTableName, {"catalogId": aId}, {"rootCatalogId": nNewRootId})
+            bOK = self.update(_kFileTableName, {"realCatalogId": aId}, {"rootCatalogId": nNewRootId})
         return bOK
 
     def checkUpdateCatelogRootInfo(self, aUserId):
-        "判断指定的用户的根目录是否需要更新"
+        "判断指定的用户的根目录是否需要更新,只在扫描磁盘时起作用"
         associateRootIds = self.getUserRootCatalogs(aUserId);
         for rootId in associateRootIds:
             catInfo = self.getCatalogById(rootId);
@@ -395,7 +397,7 @@ class DataManager(JxdSqlDataBasic):
         curTime = time.time()
         if aFromLocal:
             nFileStatus = defines.kFileStatusFromLocal
-            makeValue(aFileInfo, "importTime", curTime)
+            makeValue(aFileInfo, "importTime", curTime )
         else:
             nFileStatus = defines.kFileStatusFromUploading
         aFileInfo["rootCatalogId"] = aRootId
@@ -415,22 +417,19 @@ class DataManager(JxdSqlDataBasic):
         if aLimitStrRootIds != None and aFileInfo.get("catalogId") != None:
             #新位置是否有效
             nNewCatalogId = aFileInfo["catalogId"]
-            newCatalogRow = self.select(_kCatalogTableName, 
-                    {"id": nNewCatalogId, formatInField("rootId", aLimitStrRootIds): None})
-            if not newCatalogRow:
-                return False
-
-            #当前位置时判断
-            row = self.select(_kFileTableName, 
-                    {"id": aFileId, 
-                        formatInField("rootCatalogId", aLimitStrRootIds): None})
+            sql = """select a.rootId as newRootId, b.catalogId as curCatalogId, b.rootCatalogId 
+                from {catalogTable} a, {fileTable} b 
+                where a.id = ? and a.rootId in ({limitIds}) 
+                    and b.id = ? and b.rootCatalogid in ({limitIds})
+            """.format(catalogTable = _kCatalogTableName, fileTable = _kFileTableName, 
+                    limitIds = aLimitStrRootIds)
+            row = self.fetch(sql, (nNewCatalogId, aFileId))
             if not row:
                 return False
 
-            #是否要修改
-            nOldCatalogId = row[kFileFieldCatalogId]
-            if nNewCatalogId != nOldCatalogId:
-                aFileInfo["rootCatalogId"] = nNewParentId
+            #是否要修改 catalogId
+            if nNewCatalogId != row[1] and row[0] != row[2]:
+                aFileInfo["rootCatalogId"] = row[0]
             else:
                 aFileInfo.pop("catalogId")
 
@@ -439,9 +438,17 @@ class DataManager(JxdSqlDataBasic):
         if aFileInfo.get("lastModifyTime") == None:
             afv = {"lastModifyTime": time.time()};
         bOK = self.update(_kFileTableName,
-                {"id": aId,
-                    formatInField("rootId", aLimitStrRootIds): None}, 
-                aCatalogInfo, afv);
+                {"id": aFileId,
+                    formatInField("rootCatalogId", aLimitStrRootIds): None}, 
+                aFileInfo, afv);
+
+
+
+
+
+
+
+        
 
     def getFileWithRootAndId(self, aStrRootIds, aFileId):
         """获取指定 Id 的文件信息
@@ -597,8 +604,11 @@ def buildCatalogInfo(aCatalogRow, aDbObject):
 if __name__ == "__main__":
     print("begin test")
     db = DataManager()
-    print(db.getFileByRealCatalogId(1, "a2.mp3"))
-    # db.updateCatalog(9, {"parentId": 1, "name": "moveTest"}, "1")
+    db.autoSave = False
+    # db.updateFile(20, {"name": "myTest", "catalogId":5}, "1,2")
+    # print(db.getFileByRealCatalogId(1, "a2.mp3"))
+    db.updateCatalog(5, {"parentId": 3, "name": "moveTest"}, "1,2")
+    db.save()
     # db.deleteCatalogs("3, 4,5", "1,2,3")
     # db.makeCatalog({"path": "/A/B/1"})
     # db.makeCatalog({"path": "/a/b/"})

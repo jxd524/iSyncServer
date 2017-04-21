@@ -164,7 +164,7 @@ class ScanDisk(object):
     #将文件添加到数据库, 无返回值
     def _addFileToDb(self, aFileName, aRootId, aPathId):
         strName = os.path.split(aFileName)[1];
-        if self.dbManager.getFileByCatalogId(aPathId, strName):
+        if self.dbManager.getFileByRealCatalogId(aPathId, strName):
             return;
 
         fStat = os.stat(aFileName);
@@ -220,14 +220,15 @@ class ScanDisk(object):
         #add to db
         # strFileName = os.path.split(aFileName)[1];
         print("     %s" % strName);
-        self.dbManager.addFile(aRootCatalogId=aRootId, aCatalogId=aPathId,
-                { "fileName": strName, 
+        self.dbManager.addFile(aRootId, aPathId,
+                {"fileName": strName,
                     "type": nFileStyle,
                     "size": nFileSize,
                     "createTime": nCreateTime,
                     "width": nWidth,
                     "height": nHeight,
-                    "duration": nDuration})
+                    "duration": nDuration},
+                True)
         # addFile(aRootCatalogId=aRootId, aCatalogId=aPathId, aFileName=strName,
                 # aFileType= nFileStyle, aSize=nFileSize, aCreateTime=nCreateTime,
                 # aWidth=nWidth, aHeight=nHeight, aDuration=nDuration);
@@ -278,7 +279,6 @@ def scanByJsonFile(aJsonFileName):
             beginScan(item.get("paths"), item.get("users"), dm, item.get("merge"));
         except Exception as e:
             print(e);
-    dm.save();
 
 def beginScan(aPaths, aUsers, aDM = None, aMergeRootPath = True):
     if aDM is None:
@@ -288,6 +288,7 @@ def beginScan(aPaths, aUsers, aDM = None, aMergeRootPath = True):
     if aMergeRootPath is not None:
         sd.mergeRootPaths = aMergeRootPath;
     sd.startScan();
+    aDM.save()
 
 def makeUsers(aDataManager, aUsers):
     "处理配置文件中users对象,生成用户表数据,插入数据库"

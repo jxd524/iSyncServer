@@ -197,7 +197,7 @@ def formatInField(aName, aValue):
     "格式SQL的in查询字段"
     return (lambda :"{} in ({})".format(aName, aValue)) if aValue != None else None
 
-def makeValue(self, aDict, aKey, aDefaultValue):
+def makeValue(aDict, aKey, aDefaultValue):
     "确保容器存在指定key,value"
     v = aDict.get(aKey)
     if v == None:
