@@ -206,7 +206,7 @@ class ScanDisk(object):
                     else:
                         nFileStyle = defines.kFileTypeImage;
                 elif bHasAudioStream:
-                    nFileStyle = defines.kFileTypeFile;
+                    nFileStyle = defines.kFileTypeAudio
 
                 # Txt 文件
                 if mediaInfo["format"]["format_long_name"] == "Tele-typewriter":
@@ -220,6 +220,8 @@ class ScanDisk(object):
         #add to db
         # strFileName = os.path.split(aFileName)[1];
         print("     %s" % strName);
+        if nWidth > 0:
+            print(nWidth, nHeight)
         self.dbManager.addFile(aRootId, aPathId,
                 {"fileName": strName,
                     "type": nFileStyle,

@@ -27,7 +27,7 @@ app = Flask(__name__);
 app.secret_key = defines.kAppSecretKey;
 
 #db manager
-def getDbManager():
+def _getDbManager():
     "按需获取数据库对象"
     db = getattr(g, "__dataManager", None);
     if db is None:
@@ -41,74 +41,64 @@ def teardown_request(exception):
         g.__dataManager = None;
 
 #help function
+def _getFileInfo(aOtherParams, aValideFileTypes):
+    """获取指定文件资源,返回值参考 checkApiParam, 若成功时,返回值result[kParamForRequestParams]会加上
+        "_x_file": 资源对应的全路径
+        "_x_fileInfo": 在数据库中对应的Row信息
 
-def getResOnResponse(aValideFileType, aForceStatusCode):
-    """响应请求时调用,获取 id ,返回(fileName, errorResponse)
-
-    :aValideFileType: 有效的文件类型,None 表示不判断
-    :aForceStatusCode: 强制返回的状态码,None 表示根据不同状态返回不同状态码
-    :returns: (fileName, dbFileInfo, errorResponse)
+    :aOtherParam: 除了"id"之后的其它信息,必须为一个可变数组[]
+    :aValideFileTypes: 有效的文件类型,一个list(int),None 表示不判断
+    :returns: 参考 checkApiParam
     """
-    strFileName = None;
-    # 登陆判断
-    loginInfo = getCurLoginInfo();
-    if loginInfo is None:
-        nStatusCode = aForceStatusCode if aForceStatusCode else 403;
-        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NeedLogin, \
-                statusCode=nStatusCode);
+    param = aOtherParams if aOtherParams else []
+    param.append({"name": "id", "checkfunc": unit.checkParamForInt})
 
-    #参数判断
-    bParamOK = False;
-    try:
-        nId = int(request.args.get("id"));
-        bParamOK = nId > 0;
-    except Exception as e:
-        bParamOK = False;
-    if not bParamOK:
-        nStatusCode = aForceStatusCode if aForceStatusCode else 416;
-        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param,\
-                statusCode=nStatusCode);
+    result = checkApiParam(True, param)
+    if not result[kParamForResult]:
+        return result
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+
+    nId = param["id"]
 
     #获取文件信息
-    db = getDbManager();
-    dbFile = db.getFileWithRootAndId(loginInfo.rootIdsString, nId);
+    db = _getDbManager();
+    dbFile = db.getFileByIdAndRootIds(nId, loginInfo.rootIdsString)
     if dbFile is None:
-        nStatusCode = aForceStatusCode if aForceStatusCode else 301;
-        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotResource,\
-                statusCode=nStatusCode);
+        return False, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotResource), 301
+
 
     #文件类型判断
-    if aValideFileType:
+    if aValideFileTypes:
         nType = dbFile[dataManager.kFileFieldType];
-        if nType not in aValideFileType:
-            nStatusCode = aForceStatusCode if aForceStatusCode else 416;
-            return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ErrorFileTypeForOpt,\
-                    statusCode=nStatusCode);
+        if nType not in aValideFileTypes:
+            return False, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ErrorFileTypeForOpt), 416
 
     #获取文件位置
-    nCatalog = dbFile[dataManager.kFileFieldCatalogId];
-    dbCatalog = db.getCatalogWithRootAndId(loginInfo.rootIdsString, nCatalog);
+    nCatalog = dbFile[dataManager.kFileFieldRealCatalogId]
+    dbCatalog = db.getCatalogByIdAndRootIds(nCatalog, loginInfo.rootIdsString);
     if dbCatalog is None:
         appLog.logObject().error("数据库中的数据有误,找不到对应的路径信息=> 文件ID=%d" % nId);
-        nStatusCode = aForceStatusCode if aForceStatusCode else 500;
-        return strFileName, None, responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError,\
-                statusCode=nStatusCode);
+        return False, responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError), 500
 
     #文件判断
     strFileName = os.path.join(dbCatalog[dataManager.kCatalogFieldPath], \
             dbFile[dataManager.kFileFieldFileName]);
     if not os.path.isfile(strFileName):
         appLog.logObject().error("找不到文件=> 文件ID=%d" % nId);
-        nStatusCode = aForceStatusCode if aForceStatusCode else 500;
-        return None, None, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ResourceHasBeenRemove,\
-                statusCode=nStatusCode);
+        return False, responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_ResourceHasBeenRemove), 500
 
-    return strFileName, dbFile, None;
+    param["_x_file"] = strFileName
+    param["_x_fileInfo"] = dbFile
+    return result
+
 
 # api define
 @app.route("/", methods=["POST"])
 def appHome():
     return("hello world");
+
 
 @app.route("/login.icc", methods=["POST", "GET"])
 def appLogin():
@@ -118,7 +108,7 @@ def appLogin():
         return result[kParamForErrorResponse]
 
     param = result[kParamForRequestParams]
-    db = getDbManager()
+    db = _getDbManager()
     row = db.getUser(param["userName"], param["password"])
     if row is None:
         return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_LoginNamePassword)
@@ -150,6 +140,7 @@ def appLogin():
 
     return responseHelp.buildSuccessResponseData(dataManager.buildUserInfo(row))
 
+
 @app.route("/logout.icc", methods=["POST"])
 def appLogout():
     "退出"
@@ -159,6 +150,7 @@ def appLogout():
         LoginInfo.DeleteObject(key)
         session.clear();
     return responseHelp.buildSuccessResponseData("");
+
 
 @app.route("/helpInfo.icc", methods=["GET"])
 def appGetHelpInfo():
@@ -179,7 +171,7 @@ def appGetHelpInfo():
         return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
 
     # 查询并返回数据
-    db = getDbManager()
+    db = _getDbManager()
     hi = db.getHelpInfo(nType, nId, userLoginInfo.rootIdsString)
     nLen = len(hi) if hi else 0
     ltData = {"helpInt": hi[0] if nLen > 0 else None,
@@ -187,6 +179,7 @@ def appGetHelpInfo():
               "lastModifyTime": hi[2] if nLen > 2 else None}
     unit.filterNullValue(ltData)
     return responseHelp.buildSuccessResponseData(ltData)
+
 
 @app.route("/updateHelpInfo.icc", methods=["POST"])
 def appSetHelpInfo():
@@ -212,7 +205,7 @@ def appSetHelpInfo():
 
     # 设置
     if nHelpId != None or strHelpText != None:
-        db = getDbManager()
+        db = _getDbManager()
         db.setHelpInfo(nType, nId, nHelpId, strHelpText, userLoginInfo.rootIdsString)
         return responseHelp.buildSuccessResponseData(None)
     return responseHelp.buildErrorResponseData(kCmdUserError_Param)
@@ -231,7 +224,7 @@ def appGetCatalogs():
     strParentIds = result[kParamForRequestParams]["pids"]
 
     # 查询数据 
-    db = getDbManager()
+    db = _getDbManager()
     dbItems = db.getCatalogsByParentIds(strParentIds, loginInfo.rootIdsString)
 
     #生成数据
@@ -239,6 +232,7 @@ def appGetCatalogs():
     for item in dbItems:
         ltData.append(dataManager.buildCatalogInfo(item, db))
     return responseHelp.buildSuccessResponseData(ltData)
+
 
 @app.route("/createCatalog.icc", methods=["POST"])
 def appCreateCatalog():
@@ -259,7 +253,7 @@ def appCreateCatalog():
     param = result[kParamForRequestParams]
 
     #查询数据
-    db = getDbManager()
+    db = _getDbManager()
     parentItem = db.getCatalogByIdAndRootIds(param["parentId"], loginInfo.rootIdsString)
     if not parentItem:
         return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_CatalogIdInValid)
@@ -273,6 +267,7 @@ def appCreateCatalog():
     item = db.makeCatalog(param)
     return responseHelp.buildSuccessResponseData(dataManager.buildCatalogInfo(item, db))
 
+
 @app.route("/deleteCatalog.icc", methods=["POST"])
 def appDeleteCatalog():
     "删除目录"
@@ -282,12 +277,13 @@ def appDeleteCatalog():
 
     loginInfo = result[kParamForLoginInfo]
     param = result[kParamForRequestParams]
-    db = getDbManager()
+    db = _getDbManager()
     try:
         db.deleteCatalogs(param["ids"], loginInfo.rootIdsString)
         return responseHelp.buildSuccessResponseData("OK")
     except Exception as e:
         return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DeleteError)
+
 
 @app.route("/updateCatalog.icc", methods=["POST"])
 def appUpdateCatalog():
@@ -307,7 +303,7 @@ def appUpdateCatalog():
     param = result[kParamForRequestParams]
     nId = param["id"]
     param.pop("id")
-    db = getDbManager()
+    db = _getDbManager()
     bOk = db.updateCatalog(nId, param, loginInfo.rootIdsString)
     if bOk:
         return responseHelp.buildSuccessResponseData("OK") 
@@ -315,95 +311,55 @@ def appUpdateCatalog():
         return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
 
 
-
-
 @app.route("/files.icc", methods=["GET"])
 def appGetFiles():
     "获取指定目录下的文件"
 
-    # 登陆判断
-    loginInfo = getCurLoginInfo();
-    if loginInfo is None:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NeedLogin);
+    result = checkApiParam(True, [
+        {"name": "pids", "checkfunc": unit.checkParamForIntList},
+        {"name": "pageIndex", "checkfunc": unit.checkParamForInt},
+        {"name": "maxPerPage", "checkfunc": lambda v: int(v) if int(v) > 0 and int(v) < 10000 else 100,
+            "default": 100},
+        {"name": "types", "checkfunc": unit.checkParamForIntList, "default": None},
+        {"name": "sort", "checkfunc": unit.checkParamForInt, "default": 0}])
 
-    # 参数判断
-    bParamOK = False;
-    try:
-        strPathIds = "{}".format(request.values["pids"]);
-        nPageIndex = int(request.values["pageIndex"]);
-        nMaxPerPage = int(request.values["maxPerPage"]);
-        #可选参数
-        strTypes = request.values.get("types");
-        nSort = request.values.get("sort");
-        try:
-            nSort = int(nSort);
-        except Exception as e:
-            nSort = 0;
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-        bParamOK = appUnit.checkMultiStrNumbers(strPathIds) and nPageIndex >= 0 and nMaxPerPage > 0;
-        if bParamOK:
-            if not appUnit.checkMultiStrNumbers(strTypes):
-                strTypes = None;
-    except Exception as e:
-        bParamOK = False;
-
-    if not bParamOK:
-        print(strPathIds, nPageIndex, nMaxPerPage, strTypes, nSort);
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
 
     # 查询数据
-    db = getDbManager();
-    dbItems, pageInfo = db.getFiles(strPathIds, loginInfo.rootIdsString, nPageIndex, nMaxPerPage, strTypes, nSort);
+    db = _getDbManager();
+    dbItems, pageInfo = db.getFiles(param["pids"], loginInfo.rootIdsString, param["pageIndex"], param["maxPerPage"], param["types"], param["sort"])
 
     #生成数据
-    ltData = [];
-    for item in dbItems:
-        strName = item[dataManager.kFileFieldName];
-        if strName is None:
-            strName = item[dataManager.kFileFieldFileName];
-        catalogItem = {"id": item[dataManager.kFileFieldId],
-            "catalogId": item[dataManager.kFileFieldCatalogId],
-            "name": strName,
-            "createTime": item[dataManager.kFileFieldCreateTime],
-            "uploadTime": item[dataManager.kFileFieldUploadTime],
-            "importTime": item[dataManager.kFileFieldImportTime],
-            "lastModifyTime": item[dataManager.kFileFieldLastModifyTime],
-            "size": item[dataManager.kFileFieldSize],
-            "type": item[dataManager.kFileFieldType],
-            "duration": item[dataManager.kFileFieldDuration],
-            "width": item[dataManager.kFileFieldWidth],
-            "height": item[dataManager.kFileFieldHeight],
-            "helpInt": item[dataManager.kFileFieldHelpInt],
-            "helpText": item[dataManager.kFileFieldHelpText]};
-        appUnit.filterNullValue(catalogItem);
-        ltData.append(catalogItem);
+    ltData = dataManager.buildFileInfo(dbItems)
     return responseHelp.buildSuccessResponseData({"list": ltData, "page": pageInfo});
+
 
 @app.route("/thumbnail.icc", methods=["GET"])
 def appGetThumb():
     "获取文件的缩略图"
+    result = _getFileInfo(
+            [{"name": "level", "checkfunc": unit.checkParamForInt, "default": 0}],
+            (defines.kFileTypeImage, defines.kFileTypeGif, defines.kFileTypeVideo))
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-    #获取指定资源的具体位置
-    validType = (appUnit.FileType.Image.value, appUnit.FileType.Gif.value, appUnit.FileType.Video.value);
-    strFileName, dbFile, errResponse = getResOnResponse(validType, 200);
-    if strFileName is None:
-        return errResponse;
-
-    #获取要生成的大小
-    try:
-        nMaxSize = int(request.args.get("maxSize"));
-    except Exception as e:
-        nMaxSize = 90
-    if nMaxSize <= 0 or nMaxSize > 1000:
-        nMaxSize = 90;
+    param = result[kParamForRequestParams]
+    print(param)
+    nLevel = param["level"]
+    strFile = param["_x_file"]
+    dbFile = param["_x_fileInfo"]
 
     #根据参数生成缩略图
-    nId = dbFile[dataManager.kFileFieldId];
-    nWidth = dbFile[dataManager.kFileFieldWidth];
-    nHeight = dbFile[dataManager.kFileFieldHeight];
-    nDuration = dbFile[dataManager.kFileFieldDuration];
-    nCatalogId = dbFile[dataManager.kFileFieldCatalogId];
-    strFileOut = appUnit.buildThumbFile(strFileName, nId, nWidth, nHeight, nDuration, nCatalogId, nMaxSize);
+    nId = dbFile[dataManager.kFileFieldId]
+    nWidth = dbFile[dataManager.kFileFieldWidth]
+    nHeight = dbFile[dataManager.kFileFieldHeight]
+    nType = dbFile[dataManager.kFileFieldType]
+    nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
+    strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nWidth, nHeight, nType, nLevel)
 
     #发送数据
     return responseHelp.sendFile(strFileOut);

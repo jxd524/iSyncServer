@@ -134,9 +134,9 @@ def _FileCreateTableSQL():
                 duration float default 0,
                 width integer,
                 height integer,
-                thumbFileStatus char DEFAULT(0),
-                screenThumbFileStatus char DEFAULT(0),
-                originFileStatus char,
+                statusForThumb char DEFAULT(0),
+                statusForScreen char DEFAULT(0),
+                statusForOrigin char,
                 orientation char default(0),
                 memo varchar(1024),
                 helpInt integer,
@@ -205,6 +205,7 @@ class DataManager(JxdSqlDataBasic):
                 self.update(_kUserTableName, {"id": nId}, {"password": aPassword});
         return nId;
 
+
     def getUser(self, aUserName, aPassword):
         "根据用户跟密码查询,若成功,则更新登陆时间"
         row = self.select(_kUserTableName, {"name": aUserName, "password": aPassword});
@@ -222,13 +223,16 @@ class DataManager(JxdSqlDataBasic):
         "根据路径,获取目录信息,不存在返回None"
         return self.select(_kCatalogTableName, {"path": os.path.abspath(aPath)});
 
+
     def getCatalogById(self, aId):
         "根据Id,获取目录信息,不存在返回None"
         return self.select(_kCatalogTableName, {"id": aId});
 
+
     def getCatalogByIdAndRootIds(self, aId, aLimitStrRootIds):
         "获取指定 Id 的目录信息"
         return self.select(_kCatalogTableName, {"id": aId, formatInField("rootId", aLimitStrRootIds): None})
+
 
     def getCatalogsByParentIds(self, aParentIds, aLimitStrRootIds):
         "获取在RootIds下的所有aParentIds数据"
@@ -237,12 +241,14 @@ class DataManager(JxdSqlDataBasic):
                     formatInField("parentId", aParentIds): None},
                 aOneRecord=False)
 
+
     def getCatalogState(self, aId):
         "获取指定目录的子目录数量,文件数量; 此SQL语句后续可优化,与getCatalogsByParentIds一起查询出来"
         return self.fetch("""select * from
                                 (select count(1) from catalog where parentid==?),
                                 (select count(1) from files where catalogid==?)
                 """, (aId, aId));
+
 
     def makeCatalog(self, aCatalogInfo):
         """创建目录,aCatalogInfo["path"] 必须存在
@@ -286,6 +292,7 @@ class DataManager(JxdSqlDataBasic):
             self.update(_kCatalogTableName, {"id": nId}, {"rootId": nId})
         return result
 
+
     def updateCatalog(self, aId, aCatalogInfo, aLimitStrRootIds):
         "更新目录信息, 若需要修改 parentId, 则可能需要修改rootId和所对应的File的rootCatalogId"
         bUpdateFileTable = False
@@ -325,6 +332,7 @@ class DataManager(JxdSqlDataBasic):
             bOK = self.update(_kFileTableName, {"realCatalogId": aId}, {"rootCatalogId": nNewRootId})
         return bOK
 
+
     def checkUpdateCatelogRootInfo(self, aUserId):
         "判断指定的用户的根目录是否需要更新,只在扫描磁盘时起作用"
         associateRootIds = self.getUserRootCatalogs(aUserId);
@@ -342,6 +350,7 @@ class DataManager(JxdSqlDataBasic):
                 self.update(_kFileTableName, {"rootCatalogId": rootId}, 
                         {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
 
+
     def deleteCatalogs(self, aIds, aLimitStrRootIds):
         "删除指定目录"
         if aIds == None or aLimitStrRootIds == None:
@@ -356,6 +365,7 @@ class DataManager(JxdSqlDataBasic):
         for item in rows:
             path = item[kCatalogFieldPath]
             unit.removePath(path)
+
 
     def _loopDeleteCatalogRecords(self, aParentRows):
         "递归删除指定目录的子目录与相关文件的数据库记录"
@@ -390,6 +400,7 @@ class DataManager(JxdSqlDataBasic):
                     "fileName": aFileName,
                     formatInField("rootCatalogId", aLimitStrRootIds): None})
 
+
     def addFile(self, aRootId, aRealCatalogId, aFileInfo, aFromLocal):
         """添加文件信息
             直接添加,调用者必须确保键值的正确性
@@ -403,12 +414,13 @@ class DataManager(JxdSqlDataBasic):
         aFileInfo["rootCatalogId"] = aRootId
         aFileInfo["realCatalogId"] = aRealCatalogId
         makeValue(aFileInfo, "catalogId", aRealCatalogId)
-        makeValue(aFileInfo, "thumbFileStatus", nFileStatus)
-        makeValue(aFileInfo, "screenThumbFileStatus", nFileStatus)
-        makeValue(aFileInfo, "originFileStatus", nFileStatus)
         makeValue(aFileInfo, "createTime", curTime)
         makeValue(aFileInfo, "lastModifyTime", curTime)
+        makeValue(aFileInfo, "statusForThumb", nFileStatus)
+        makeValue(aFileInfo, "statusForScreen", nFileStatus)
+        makeValue(aFileInfo, "statusForOrigin", nFileStatus)
         return self.insert(_kFileTableName, aFileInfo)
+
 
     def updateFile(self, aFileId, aFileInfo, aLimitStrRootIds):
         """更新文件信息
@@ -443,21 +455,14 @@ class DataManager(JxdSqlDataBasic):
                 aFileInfo, afv);
 
 
-
-
-
-
-
-        
-
-    def getFileWithRootAndId(self, aStrRootIds, aFileId):
+    def getFileByIdAndRootIds(self, aFileId, aRootIds):
         """获取指定 Id 的文件信息
 
-        :aStrRootIds: 所有目录 ID
         :aFileId: 文件 Id
+        :aRootIds: 根目录IDs
         """
-        sql = "select * from %s where id=? and rootCatalogId in(%s)" % (_kFileTableName, aStrRootIds);
-        return self.fetch(sql, (aFileId,));
+        return self.select(_kFileTableName, {"id": aFileId, formatInField("rootCatalogId", aRootIds): None})
+
 
     def getFiles(self, aStrPathIds, aStrRootIds, aPageIndex, aMaxPerPage, aStrTypes, aSort):
         """查找指定路径下的文件内容
@@ -469,57 +474,46 @@ class DataManager(JxdSqlDataBasic):
         :aStrTypes: 类型,详细见ReadMe.md文件
         :aSort: 排序的方式: 1->文件创建时间, 2->上传时间, 3->文件大小, 4->持续时间, 5->文件尺寸
                     >0表示升序, <0表示降序
-        :returns: list
+        :returns: datelist, pageInfo
         """
-        nLimitCount = aMaxPerPage if aMaxPerPage > 0 else 10;
-        nLimitBegin =  aPageIndex * nLimitCount;
+        where = {formatInField("catalogId", aStrPathIds): None,
+                formatInField("rootCatalogId", aStrRootIds): None,
+                formatInField("type", aStrTypes): None}
 
-        strOrderMethod = "asc" if aSort > 0 else "desc";
-        strOrder = "order by %s " + strOrderMethod;
-        if aSort < 0:
-            aSort = -aSort;
-        if aSort == 1:
-            # 文件创建时间
-            strOrder = strOrder % "createTime";
-        elif aSort == 2:
-            #上传时间
-            strOrder = strOrder % "uploadTime";
-        elif aSort == 3:
-            #文件大小
-            strOrder = strOrder % "size";
-        elif aSort == 4:
-            #持续时间
-            strOrder = strOrder % "duration";
-        elif aSort == 5:
-            #文件尺寸
-            strOrder = strOrder % ("width %s, height" % strOrderMethod);
-        else:
-            strOrder = "";
+        strWhere = self.FormatFieldValues(where, None, "and")
 
-        sqlTypes = "";
-        if aStrTypes:
-            sqlTypes = " and type in ({}) ".format(aStrTypes);
+        if aSort != None and aSort != 0:
+            nAbsSort = aSort if aSort > 0 else -aSort
+            if nAbsSort == 1:
+                strSortFieldName = "createTime"
+            elif nAbsSort == 2:
+                strSortFieldName = "uploadTime"
+            elif nAbsSort == 3:
+                strSortFieldName = "size"
+            elif nAbsSort == 4:
+                strSortFieldName = "duration"
+            elif nAbsSort == 5:
+                strSortFieldName = "width {orderMethod}, height"
+            else:
+                return None, None
+            strWhere += " order by " + strSortFieldName + " {orderMethod}"
+            strWhere = strWhere.format(orderMethod = "asc" if aSort > 0 else "desc")
 
-        #文件项内容
-        sql = """select * from {table} where catalogId in ({pathIds}) and rootCatalogId in({rootId}) 
-                    {types} {order} limit {begin},{count}
-        """.format(table=_kFileTableName, pathIds=aStrPathIds, rootId=aStrRootIds, 
-                    types=sqlTypes, order=strOrder, begin=nLimitBegin, count=nLimitCount);
-        # print(sql);
-        fileInfos = self.fetch(sql, None, False);
+        nLimitCount = aMaxPerPage if aMaxPerPage > 0 else 100
+        nLimitBegin =  aPageIndex * nLimitCount
+
+        #查询内容
+        strWhere += " limit {begin}, {count}".format(begin = nLimitBegin, count = nLimitCount)
+        sql = "select * from {} where {}".format(_kFileTableName, strWhere)
+        print(sql)
+        fileInfos = self.fetch(sql, fetchone = False)
 
         #分页信息
-        sql = """select count(1) from {table} where catalogId in ({pathIds}) and rootCatalogId in({rootId}) 
-                    {types}
-        """.format(table=_kFileTableName, pathIds=aStrPathIds, rootId=aStrRootIds, 
-                    types=sqlTypes);
-        # print(sql);
-        dbCount = self.fetch(sql);
+        dbCount = self.select(_kFileTableName, where, aFields = "count(1)")
         nItemCount = dbCount[0] if dbCount else 0;
         return fileInfos, {"pageIndex": aPageIndex,
                             "maxPerPage": nLimitCount,
                             "pageCount": (nItemCount + nLimitCount - 1) // nLimitCount};
-
 
 
 #public function - UserAssociate
@@ -601,14 +595,38 @@ def buildCatalogInfo(aCatalogRow, aDbObject):
     unit.filterNullValue(catalogInfo)
     return catalogInfo
 
+def buildFileInfo(aFileRows):
+    result = []
+    for item in aFileRows:
+        strName = item[kFileFieldName]
+        if strName is None:
+            strName = item[kFileFieldFileName]
+        catalogItem = {
+                "id": item[kFileFieldId],
+                "catalogId": item[kFileFieldCatalogId],
+                "name": strName,
+                "createTime": item[kFileFieldCreateTime],
+                "uploadTime": item[kFileFieldUploadTime],
+                "importTime": item[kFileFieldImportTime],
+                "lastModifyTime": item[kFileFieldLastModifyTime],
+                "size": item[kFileFieldSize],
+                "type": item[kFileFieldType],
+                "duration": item[kFileFieldDuration],
+                "width": item[kFileFieldWidth],
+                "height": item[kFileFieldHeight],
+                "helpInt": item[kFileFieldHelpInt],
+                "helpText": item[kFileFieldHelpText]}
+        unit.filterNullValue(catalogItem)
+        result.append(catalogItem)
+    return result
+
+
 if __name__ == "__main__":
     print("begin test")
     db = DataManager()
-    db.autoSave = False
+    print(db.getFiles("1, 2", "1,2", 0, 10, None, 0))
     # db.updateFile(20, {"name": "myTest", "catalogId":5}, "1,2")
     # print(db.getFileByRealCatalogId(1, "a2.mp3"))
-    db.updateCatalog(5, {"parentId": 3, "name": "moveTest"}, "1,2")
-    db.save()
     # db.deleteCatalogs("3, 4,5", "1,2,3")
     # db.makeCatalog({"path": "/A/B/1"})
     # db.makeCatalog({"path": "/a/b/"})

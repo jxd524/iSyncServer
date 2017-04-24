@@ -9,8 +9,9 @@ __author__="Terry<jxd524@163.com>"
 
 # 文件状态
 kFileStatusFromLocal        = 0 # 来自本地
-kFileStatusFromUploading    = 1 # 来自上传
-kFileStatusFromUploaded     = 2 # 来自上传,并且已经上传完成
+kFileStatusBuildError       = 1 # 本地生成时出错
+kFileStatusFromUploading    = 2 # 来自上传
+kFileStatusFromUploaded     = 3 # 来自上传,并且已经上传完成
 
 # 媒体类型
 kFileTypeImage      = 1 << 0
@@ -21,7 +22,7 @@ kFileTypeFile       = 1 << 4
 
 
 # 生成等比例缩略图时,最大长度(宽度或长度)
-kThumbnailImageMaxSize = 200
+kThumbnailImageMaxSize = 100
 
 # 生成等比例屏幕大小缩略图时,最大长度,只有视频文件需要
 kScreenThumbnailImageMaxSize = 800

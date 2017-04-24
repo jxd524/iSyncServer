@@ -29,7 +29,7 @@ def getFileMediaInfo(aFileName):
         return json.loads(stdOut.decode("utf-8"));
     return None;
 
-def buildImageThumbnail(aInputFile, aOutFileName, aWidth, aHeight):
+def _buildImageThumbnail(aInputFile, aOutFileName, aWidth, aHeight):
     """生成图片的缩略图
 
     :aInputFile: 文件全路径
@@ -70,7 +70,7 @@ def buildImageThumbnail(aInputFile, aOutFileName, aWidth, aHeight):
         return False;
 
 
-def buildVideoThumbnail(aInputFile, aOutFileName, aWidth, aHeight, aStrTimePos="00:00:01"):
+def _buildVideoThumbnail(aInputFile, aOutFileName, aWidth, aHeight, aStrTimePos="00:00:01"):
     """生成视频文件的缩略图
 
     :aInputFile: 文件全路径
@@ -86,58 +86,42 @@ def buildVideoThumbnail(aInputFile, aOutFileName, aWidth, aHeight, aStrTimePos="
     p.wait();
     return os.path.isfile(aOutFileName);
 
-def generateThumbailImage(aRootId, aPathId, aFileId, aInputFile, aOrgWidth, aOrgHeight, aFileType, aForScreenThumb):
-    """为数据库中的媒体生成指定类型的缩略图,若文件已存在,则直接返回文体
-    生成的缩略图分两种: 1-> 用于在列表中显示的小图,最大不超过 defines.kThumbnailImageMaxSize
-                        2-> 用于全屏显示的图,最大不超过 defines.kScreenThumbnailImageMaxSize
-
-    :aRootId: 根目录Id, 参与生成输出路径
-    :aPathId: 父目录Id, 参与生成输出路径
+def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrgWidth, aOrgHeight, aFileType, aLevel):
+    """为数据库中的媒体生成指定类型的缩略图,若文件已存在,则直接返回路径
+    
+    :aCatalogId: 文件对应的路径ID
     :aFileId: 文件Id, 参与生成文件名
     :aInputFile: 输入文件
     :aOrgWidth: 原始媒体宽度
     :aOrgHeight: 原始媒体高度
     :aFileType: 文件类型
-    :aForScreenThumb: 生成类型
+    :aLevel: 生成类型
     :returns: 成功时返回文件路径,失败则返回None
 
     """
-    strPath = os.path.join(configs.thumbPath(), "{0}".format(aRootId));
-    strPath = os.path.join(strPath, "{0}".format(aPathId));
-    if not os.path.isdir(strPath):
-        os.makedirs(strPath);
-
-    strFileName = "{0}_{1}.jpg".format(aFileId, "screenThumb" if aForScreenThumb else "thumb" );
-    strOutFile = os.path.join(strPath, strFileName);
+    strOutFile, nMaxSize = getFileThumbFileInfo(aCatalogId, aFileId, aLevel)
     if os.path.isfile(strOutFile):
-        return strOutFile;
+        return strOutFile
 
-    nMaxSize = defines.kScreenThumbnailImageMaxSize if aForScreenThumb else defines.kThumbnailImageMaxSize
-    if defines.kFileTypeImage == aFileType and nSize >= aOrgWidth and nMaxSize >= aOrgHeight:
+    if defines.kFileTypeImage == aFileType and nMaxSize >= aOrgWidth and nMaxSize >= aOrgHeight:
         return aInputFile;
 
     #生成大小
-    f = aWidth / aHeight;
-    if aWidth < aHeight:
-        #设置高度
-        if aMaxSize < aHeight:
-            aHeight = aMaxSize;
-            aWidth = aHeight * f;
+    if aOrgWidth < aOrgHeight:
+        nH, f = (aOrgHeight, 1) if aOrgHeight < nMaxSize else (nMaxSize, nMaxSize / aOrgHeight)
+        nW = f * aOrgWidth
     else:
-        #设置宽度
-        if aMaxSize < aWidth:
-            aWidth = aMaxSize;
-            aHeight = aWidth // f;
-    aWidth = int(aWidth);
-    aHeight = int(aHeight);
-
+        nW, f = (aOrgWidth, 1) if aOrgWidth < nMaxSize else (nMaxSize, nMaxSize / aOrgWidth)
+        nH = f * aOrgHeight
+    nW = int(nW)
+    nH = int(nH)
     if defines.kFileTypeVideo == aFileType:
-        bOK = mediaHelp.buildVideoThumbnail(aInputFile, strOutFile, aWidth, aHeight);
+        bOK = _buildVideoThumbnail(aInputFile, strOutFile, nW, nH);
     else:
-        bOK = mediaHelp.buildImageThumbnail(aInputFile, strOutFile, aWidth, aHeight);
+        bOK = _buildImageThumbnail(aInputFile, strOutFile, nW, nH);
     if not bOK:
-        strOutFile = None;
-    return strOutFile;
+        print("error")
+    return strOutFile if bOK else "";
 
 def filterNullValue(aDict):
     "过滤空值"
@@ -151,28 +135,19 @@ def filterNullValue(aDict):
 
 def checkParamForInt(aParam):
     "检查是否为Int"
-    try:
-        return int(aParam)
-    except Exception as e:
-        return None
+    return int(aParam)
+
 
 def checkParamForIntList(aParam):
     "检查是否为一个Int的列表: 1, 2, 4"
-    try:
-        intList = list(map(int, aParam.split(",")))
-        if len(intList) > 0:
-            return aParam
-    except Exception as e:
-        pass
-    return None
+    intList = list(map(int, aParam.split(",")))
+    return aParam if len(intList) > 0 else None
+
 
 def checkParamForDatetime(aParam):
     "检查是否可转成Datetime对象"
-    try:
-        return datetime.datetime.fromtimestamp(float(aParam))
-    except Exception as e:
-        pass
-    return None
+    return datetime.datetime.fromtimestamp(float(aParam))
+
 
 def makeUserCreateCatalogPath(aParentPath, aName):
     "用户创建目录时生成路径"
@@ -207,6 +182,20 @@ def removePath(aPath):
     import subprocess
     subprocess.Popen("rm -rf '{}'".format(aPath), shell=True)
 
+def getFileThumbFileInfo(aCatalogId, aFileId, aLevel):
+    "根据目录,文件,生成对应的缩略图位和最大值"
+    strRootPath = configs.thumbPath()
+    result = os.path.join(strRootPath, "{}".format(aCatalogId))
+    if not os.path.isdir(result):
+        try:
+            os.makedirs(result)
+        except Exception as e:
+            return None, 0
+    if aLevel == 0:
+        return os.path.join(result, "thumb_{}".format(aFileId)), defines.kThumbnailImageMaxSize
+    else:
+        return os.path.join(result, "thumbScreen_{}".format(aFileId)), defines.kScreenThumbnailImageMaxSize
 
 if __name__ == "__main__":
     pass
+    # generateThumbailImage(1, 1, None, 3030, 1030, 1, 1)

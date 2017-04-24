@@ -39,7 +39,10 @@ excerpt: iSync iPrivate 文件管理 同步 云盘
 **onlineTimeout**: 在线人数极值,超过此值,则会进行超时处理,默认100
 **onlineTimeout**: 在线用户无活动保持的最大时间,默认 3600, 单位: 秒
 
+<span id="scanDisk"/>
+
 # 扫描数据(附加功能)
+
 如果不想将已有文件加入到系统,可不理会此功能
 为方便处理磁盘数据,提供了 **scanDisk.py** 来扫描数据,具体参数见下表
 
@@ -304,27 +307,20 @@ typedef datetime float
 
 ## 文件相关接口
 
-
-
-
-
-
-
-
-## 请求指定目录下的数据: files.icc
-
+### 请求指定目录下的数据: files.icc
 | 请求方法 | GET |
-| -------- | -----|
-| 请求参数 | pids | pageIndex | maxPerPage | types(可选) | sort(可选) |
-| 参数类型 | string | int | int | int | int |
-| 响应Data | 见下表 |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| pids | string | 指定目录,如"1,2,3" |
+| pageIndex | int | 请求的页序号 |
+| maxPerPage | int | 可选,每页数量.默认为100|
+| types | string | 可选,数据类型,具体值参考[fileType](#fileType),如"1,8,16".默认为"所有类型" |
+| sort | int | 可选,排序方式, **>0**: 升序, **<0**:降序,**0**:不排序, 参考:[sort](#sort) |
+|||
+| 响应Data | [fileResponse](#fileResponse) |
 
-参数说明
-**pids**: 所属目录ID.如 "1,2,3"
-**types**: 数据类型, 具体值可参考fileType的定义.可传入多个类型如: "1,2,4", 也可以不传,表示所有
-**pageIndex**: 请求的页序号
-**maxPerPage**: 每页数量
-**sort**: 排序方式: **>0** ==> 升序, **<0** 降序, 默认为0
+<span id="sort">**sort**</span>
 
 | sort 值 | 含义 |
 | ---- | ---- |
@@ -335,27 +331,43 @@ typedef datetime float
 | 4, -4 | 持续时间 |
 | 5, -5 | 文件尺寸 |
 
-```json
-{
-    "page": {pageInfo object},
-    "list": [fileInfo object]
+
+<span id="fileResponse">**fileResponse**</span>
+
+>{
+    "list": [{[fileInfo](#fileInfo)}],
+    "page": {[pageInfo](#pageInfo)}
 }
-```
+
 
 ## 请求指定文件的缩略图: thumbnail.icc
-
-只对MediaType为 Image, Gif 或 Video 的文件有效
-
 | 请求方法 | GET |
-| -------- | -----|
-| 请求参数 | id | forScreen |
-| 参数类型 | int | BOOL |
-| 范围 | > 0 | 0 表示获取最小的缩略图, 其它表示获取更大的缩略图 |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| id | int | 文件Id, 只有[fileType](#fileType)为 Image, Gif 或 Video 时有效 |
+| level | int | 缩略图等级.[参考](#thumbnailInfo),默认为: 0 |
+|||
 | 响应Data | 图片数据或JSON数据(出错) |
 
-参数说明
-**id**: 文件 ID
-**forScreen**: 只有视频文件需要生成更大的缩略图.
+
+<span id="thumbnailInfo">缩略图说明</span>
+
+| level 值 | 含义 | 服务端是否生成 |
+| ---- | ---- | ------ |
+| 0 | 最大为100*100的等比缩略图 | 根据[statusForThumb](#fileStatus)的值生成 |
+| 1 | 最大为800*800的等比缩略图 | 根据[statusForScreen](#fileStatus)的值生成 |
+
+<span id="fileStatus">fileStatus说明</span>
+
+| fileStatus 值 | 含义 |
+| ---- | ---- | ------ |
+| 0 | 默认值,使用[scanDisk](#scanDisk)时使用,表示在需要时自动生成 |
+| 1 | 服务器无法生成指定缩略图时标志 |
+| 2 | 等待客户端上传 |
+| 3 | 客户端上传完成 |
+
+
 
 ## 请求指定的文件: downFile.icc
 下载指定的资源

@@ -93,7 +93,7 @@ def buildErrorResponseData(aCode, statusCode=200):
         msg = "未定义错误信息内容: %d" % aCode;
     return make_response(buildResponseData(aCode, aMessage=msg, aStatusCode = statusCode));
 
-def sendFile(aStrFileName):
+def sendFile(aStrFileName, aErrorStatusCode=200):
     """发送文件到客户端,支持单 Range 请求
 
     :aStrFileName: 文件名称
@@ -102,36 +102,36 @@ def sendFile(aStrFileName):
     """
 
     if not os.path.isfile(aStrFileName):
-        log.logObject().error("找不到文件=%s" % aStrFileName);
-        return buildErrorResponseData(kCmdUserError_NotResource);
+        log.logObject().error("找不到文件=%s" % aStrFileName)
+        return buildErrorResponseData(kCmdUserError_NotResource, statusCode=aErrorStatusCode)
 
 
     try:
-        httpHeaderRange = request.headers.get("Range");
-        r = http.parse_range_header(httpHeaderRange);
-        bHasRange = r is not None and len(r.ranges) == 1 and r.ranges[0][0] is not None;
+        httpHeaderRange = request.headers.get("Range")
+        r = http.parse_range_header(httpHeaderRange)
+        bHasRange = r is not None and len(r.ranges) == 1 and r.ranges[0][0] is not None
     except Exception as e:
-        bHasRange = False;
+        bHasRange = False
 
     #发送整个文件
     if not bHasRange:
-        return send_file(aStrFileName);
+        return send_file(aStrFileName)
 
     #发送部分文件
-    nFileSize = os.path.getsize(aStrFileName);
-    beginPos, stopPos = r.range_for_length(nFileSize);
+    nFileSize = os.path.getsize(aStrFileName)
+    beginPos, stopPos = r.range_for_length(nFileSize)
     with open(aStrFileName, "rb") as f:
-        f.seek(beginPos);
-        byteContens = f.read(stopPos - beginPos);
+        f.seek(beginPos)
+        byteContens = f.read(stopPos - beginPos)
 
-    strMimeType = mimetypes.guess_type(aStrFileName)[0];
+    strMimeType = mimetypes.guess_type(aStrFileName)[0]
     if strMimeType is None:
-        strMimeType = "application/octet-stream";
+        strMimeType = "application/octet-stream"
     resp = Response(byteContens, 206, mimetype = strMimeType, 
             headers={"Content-Range": r.make_content_range(nFileSize),
                 "Accept-Ranges": r.units,
                 "Etag": "%d" % nFileSize});
-    return resp;
+    return resp
 
 def checkApiParam(aNeedLogin, aParams):
     """判断Api参数信息是否正确
@@ -180,7 +180,10 @@ def checkApiParam(aNeedLogin, aParams):
 
             value = requestValue.get(key)
             if bHasCheckFunc:
-                value = checkFunc(value)
+                try:
+                    value = checkFunc(value)
+                except Exception as e:
+                    value = None
             bParamOK = value != None
             if not bParamOK and bHasDefaultValue:
                 value = defaultValue
