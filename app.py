@@ -348,7 +348,6 @@ def appGetThumb():
         return result[kParamForErrorResponse]
 
     param = result[kParamForRequestParams]
-    print(param)
     nLevel = param["level"]
     strFile = param["_x_file"]
     dbFile = param["_x_fileInfo"]
@@ -359,7 +358,8 @@ def appGetThumb():
     nHeight = dbFile[dataManager.kFileFieldHeight]
     nType = dbFile[dataManager.kFileFieldType]
     nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
-    strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nWidth, nHeight, nType, nLevel)
+    nOrientation = dbFile[dataManager.kFileFieldOrientation]
+    strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nOrientation, nWidth, nHeight, nType, nLevel)
 
     #发送数据
     return responseHelp.sendFile(strFileOut);

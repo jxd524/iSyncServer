@@ -128,14 +128,30 @@ PS:
 typedef datetime float
 ```
 
+<span id="orientation">**orientation**</span>: 图片或视频的旋转方向
+在扫描文件时会生成,在生成缩略图时会用到,数据库中记录着原始的方向,若为0,表示不需要旋转
+
+与iOS中UIImageOrientation的具体对应关系表
+
+| UIImageOrientation | 原始exif中Orientation 值 | 生成缩略图时旋转 |
+| ------ | ------ | ------ |
+| UIImageOrientationUp | 1 | 不需要旋转 |
+| UIImageOrientationDown | 3 | 180° |
+| UIImageOrientationLeft | 6 | 顺时针90° |
+| UIImageOrientationRight | 8 | 逆时针90° |
+| UIImageOrientationUpMirrored | 2 | 水平翻转 |
+| UIImageOrientationDownMirrored | 4 | 垂直翻转 |
+| UIImageOrientationLeftMirrored | 5 | 顺时针90°+水平翻转 |
+| UIImageOrientationRightMirrored | 7 | 顺时针90°+垂直翻转 |
+
 <span id="fileType">**fileType**</span>: 媒体类型定义
 
 ```basic
-    Image   = 1 << 0;
-    Gif     = 1 << 1;
-    Video   = 1 << 2;
-    Audio   = 1 << 3;
-    File    = 1 << 4;
+kFileTypeImage      = 1 << 0
+kFileTypeGif        = 1 << 1
+kFileTypeVideo      = 1 << 2
+kFileTypeAudio      = 1 << 3
+kFileTypeFile       = 1 << 4
 ```
 
 <span id="helpInfo">HelpInfo</span>定义: 记录自带的辅助信息,这些信息对服务器没有意义,只负责保存
@@ -346,7 +362,7 @@ typedef datetime float
 |||
 | 请求参数 | 类型 | 说明 |
 | id | int | 文件Id, 只有[fileType](#fileType)为 Image, Gif 或 Video 时有效 |
-| level | int | 缩略图等级.[参考](#thumbnailInfo),默认为: 0 |
+| level | int | [缩略图等级](#thumbnailInfo),默认为: 0 |
 |||
 | 响应Data | 图片数据或JSON数据(出错) |
 

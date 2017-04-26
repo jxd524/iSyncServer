@@ -20,7 +20,6 @@ kFileTypeVideo      = 1 << 2
 kFileTypeAudio      = 1 << 3
 kFileTypeFile       = 1 << 4
 
-
 # 生成等比例缩略图时,最大长度(宽度或长度)
 kThumbnailImageMaxSize = 100
 

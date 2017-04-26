@@ -11,63 +11,187 @@ __author__="Terry<jxd524@163.com>"
 import os, subprocess, json
 import datetime
 import hashlib
-from PIL import Image
 import defines, configs
 
-def getFileMediaInfo(aFileName):
-    """获取文件的媒体信息
-        成功,返回值用命令: ffprobe
-        失败,返回None
-       
-       :aFileName: 文件全路径
+def _getOrientationFromFFprobeStream(aStream):
+    try:
+        rotate = int(aStream["tags"]["rotate"])
+        if rotate < 0:
+            rotate = 360 + rotate
+        if rotate == 90:
+            return 8
+        elif rotate == 180:
+            return 3
+        elif rotate == 270:
+            return 6
+        else:
+            #其它情况不做处理
+            return None
+    except Exception as e:
+        return None
+
+def _getMediaInfoByFFprobe(aInputFile):
+    """返回图片的 width, height, type, orientation
+        可能存在: duration 
     """
     strCmd = "ffprobe -v quiet -print_format json -show_format -show_streams -i \"" + \
-            aFileName + "\"";
-    p = subprocess.Popen(strCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True);
-    stdOut = p.communicate()[0];
-    if p.returncode == 0:
-        return json.loads(stdOut.decode("utf-8"));
-    return None;
+            aInputFile + "\""
+    p = subprocess.Popen(strCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    stdOut = p.communicate()[0]
+    if p.returncode != 0:
+        return None
 
-def _buildImageThumbnail(aInputFile, aOutFileName, aWidth, aHeight):
+    mediaInfo = json.loads(stdOut.decode("utf-8"))
+    if mediaInfo is None or len(mediaInfo) <= 1:
+        return None
+    try:
+        streams = mediaInfo["streams"]
+        bHasAudioStream = False
+        bHasVideoStream = False
+        result = {}
+        for item in streams:
+            codecType = item["codec_type"].lower()
+            if not bHasVideoStream and codecType == "video":
+                bHasVideoStream = True
+                result["width"] = item["width"]
+                result["height"] = item["height"]
+                result["orientation"] = _getOrientationFromFFprobeStream(item)
+            elif not bHasAudioStream and codecType == "audio":
+                bHasAudioStream = True
+
+        if bHasAudioStream:
+            nFileType = defines.kFileTypeVideo if bHasVideoStream else defines.kFileTypeAudio
+        else:
+            # 不存在音频时,可能是视频,可能是图片,可能是文本或其它
+            if not bHasVideoStream:
+                return None
+            fName = mediaInfo["format"]["format_name"].lower()
+            nCount = len(fName.split(","))
+            if nCount > 1:
+                # 只有视频,没有音频,未测试过这种文件
+                nFileType = defines.kFileTypeVideo
+            else:
+                if fName == "gif":
+                    nFileType = defines.kFileTypeGif
+                elif fName == "tty":
+                    nFileType = defines.kFileTypeFile
+                else:
+                    nFileType = defines.kFileTypeImage
+        result["type"] = nFileType
+
+        if nFileType == defines.kFileTypeAudio or nFileType == defines.kFileTypeVideo:
+            result["duration"] = mediaInfo["format"]["duration"]
+        elif nFileType == defines.kFileTypeFile:
+            result["width"] = None
+            result["height"] = None
+            result["orientation"] = None
+
+        return result
+    except Exception as e:
+        print("Error: parse json dat(getFileMediaInfo result data): ", aInputFile, e)
+        return None
+
+
+def _getImageInfoByPIL(aInputFile):
+    """返回图片的 width, height, type, orientation
+        可能存在: duration 
+    """
+    try:
+        from PIL import Image, GifImagePlugin
+        img = Image.open(aInputFile, "r") 
+        result = {"width": img.width, "height": img.height}
+        nOrientation = None
+        if hasattr(img, "_getexif"):
+            exif = img._getexif()
+            if exif != None:
+                try:
+                    # 从 from PIL.ExifTags import TAGS 中获取到 0x0112 表示 Orientation
+                    nOrientation = int(exif.get(0x0112))
+                except Exception as e:
+                    pass
+        result["orientation"] = nOrientation
+
+        if isinstance(img, GifImagePlugin.GifImageFile):
+            nFileType = defines.kFileTypeGif
+            try:
+                result["duration"] = img.info["duration"] * img.n_frames / 1000
+            except Exception as e:
+                pass
+        else:
+            nFileType = defines.kFileTypeImage
+        result["type"] = nFileType
+
+        return result
+    except Exception as e:
+        return None
+
+def getMediaFileInfo(aInputFile, aFileSize):
+    """获取媒体文件的 width, height, type, orientation
+        可能存在: duration 
+    根据 aFileSize 优先调用相关函数
+    """
+    if aFileSize > 1024 * 1024 * 5:
+        # > 5M 优化使用 ffprobe, 音视频文件可能比较大
+        result = _getMediaInfoByFFprobe(aInputFile)
+        if result and result["type"] in (defines.kFileTypeGif, defines.kFileTypeImage):
+            # Gif为了获取duration, Image为了更精确的orientation
+            r = _getImageInfoByPIL(aInputFile)
+            if r:
+                result = r
+    else:
+        result = _getImageInfoByPIL(aInputFile)
+        if not result:
+            result = _getMediaInfoByFFprobe(aInputFile)
+    if result:
+        nOrientation = result.get("orientation")
+        if nOrientation and nOrientation in (5,6,7,8):
+            nTemp = result["width"]
+            result["width"] = result["height"]
+            result["height"] = nTemp
+    return result
+
+
+def _buildImageThumbnail(aInputFile, aOutFileName, aOrientation, aWidth, aHeight):
     """生成图片的缩略图
 
     :aInputFile: 文件全路径
     :aOutFileName: 要输出的文件全路径
+    :aOrientation: 方向
     :aWidth: 宽度
     :aHeight: 高度
     :returns: Bool 成功与否
 
     """
-    # 用 FFmpeg 生成的图片有问题,暂时无法解决
-    # strCmd = "ffmpeg -i \"{inputFile}\" -f image2 -s {width}*{height} -y \"{outFile}\"".\
-            # format(inputFile=aInputFile, outFile=aOutFileName, width=aWidth, height=aHeight);
-    # #print(strCmd);
-    # p = subprocess.Popen(strCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True);
-    # p.wait();
-    # return;
-
     #使用PIL库生成缩略图
     try:
-        img = Image.open(aInputFile);
+        from PIL import Image
+        img = Image.open(aInputFile)
+        img.thumbnail((aWidth, aHeight))
 
-        mode = img.mode;
-        if mode not in ('L', 'RGB'):
-            if mode == 'RGBA':
-                # 透明图片需要加白色底
-                alpha = img.split()[3]
-                bgmask = alpha.point(lambda x: 255-x);
-                img = img.convert('RGB');
-                img.paste((255,255,255), None, bgmask);
-            else:
-                img = img.convert('RGB')
+        if aOrientation and aOrientation != 1:
+            if aOrientation == 3:
+                img = img.transpose(Image.ROTATE_180)
+            elif aOrientation == 6:
+                img = img.transpose(Image.ROTATE_270)
+            elif aOrientation == 8:
+                img = img.transpose(Image.ROTATE_90)
+            elif aOrientation == 2:
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            elif aOrientation == 4:
+                img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            elif aOrientation == 5:
+                img = img.transpose(Image.ROTATE_270)
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            elif aOrientation == 7:
+                img = img.transpose(Image.ROTATE_270)
+                img = img.transpose(image.FLIP_TOP_BOTTOM)
 
-        img = img.resize((aWidth, aHeight), Image.ANTIALIAS);#.convert("RGB");
-        img.save(aOutFileName);
-        return True;
+        ext = "PNG" if img.mode in ("P", "RGBA") else "JPEG"
+        img.save(aOutFileName, ext)
+        return True
     except Exception as e:
-        print("build thumbanil image error: ", e);
-        return False;
+        print("build thumbanil image error: ", e)
+        return False
 
 
 def _buildVideoThumbnail(aInputFile, aOutFileName, aWidth, aHeight, aStrTimePos="00:00:01"):
@@ -81,17 +205,19 @@ def _buildVideoThumbnail(aInputFile, aOutFileName, aWidth, aHeight, aStrTimePos=
     :returns: BOOL 是否成功
     """
     strCmd = "ffmpeg -ss {startPos} -i \"{inputFile}\" -f image2 -s {width}*{height} -y \"{outFile}\"".\
-            format(inputFile=aInputFile, outFile=aOutFileName, width=aWidth, height=aHeight, startPos=aStrTimePos);
-    p = subprocess.Popen(strCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True);
-    p.wait();
-    return os.path.isfile(aOutFileName);
+            format(inputFile=aInputFile, outFile=aOutFileName, width=aWidth, height=aHeight, startPos=aStrTimePos)
+    p = subprocess.Popen(strCmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    p.wait()
+    return os.path.isfile(aOutFileName)
 
-def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrgWidth, aOrgHeight, aFileType, aLevel):
+
+def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrientation, aOrgWidth, aOrgHeight, aFileType, aLevel):
     """为数据库中的媒体生成指定类型的缩略图,若文件已存在,则直接返回路径
     
     :aCatalogId: 文件对应的路径ID
     :aFileId: 文件Id, 参与生成文件名
     :aInputFile: 输入文件
+    :aOrientation: 方向,具体可参考 ReadMe.md
     :aOrgWidth: 原始媒体宽度
     :aOrgHeight: 原始媒体高度
     :aFileType: 文件类型
@@ -104,7 +230,7 @@ def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrgWidth, aOrgHeight
         return strOutFile
 
     if defines.kFileTypeImage == aFileType and nMaxSize >= aOrgWidth and nMaxSize >= aOrgHeight:
-        return aInputFile;
+        return aInputFile
 
     #生成大小
     if aOrgWidth < aOrgHeight:
@@ -116,21 +242,21 @@ def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrgWidth, aOrgHeight
     nW = int(nW)
     nH = int(nH)
     if defines.kFileTypeVideo == aFileType:
-        bOK = _buildVideoThumbnail(aInputFile, strOutFile, nW, nH);
+        bOK = _buildVideoThumbnail(aInputFile, strOutFile, nW, nH)
     else:
-        bOK = _buildImageThumbnail(aInputFile, strOutFile, nW, nH);
+        bOK = _buildImageThumbnail(aInputFile, strOutFile, aOrientation, nW, nH)
     if not bOK:
         print("error")
-    return strOutFile if bOK else "";
+    return strOutFile if bOK else ""
 
 def filterNullValue(aDict):
     "过滤空值"
-    removeKeys = [];
+    removeKeys = []
     for key,value in aDict.items():
         if value is None:
-            removeKeys.append(key);
+            removeKeys.append(key)
     for key in removeKeys:
-        aDict.pop(key);
+        aDict.pop(key)
 
 
 def checkParamForInt(aParam):
@@ -196,6 +322,15 @@ def getFileThumbFileInfo(aCatalogId, aFileId, aLevel):
     else:
         return os.path.join(result, "thumbScreen_{}".format(aFileId)), defines.kScreenThumbnailImageMaxSize
 
+
 if __name__ == "__main__":
     pass
-    # generateThumbailImage(1, 1, None, 3030, 1030, 1, 1)
+    # aFileName = "/Users/terry/temp/myTest/IMG_1953.JPG"
+    # fStat = os.stat(aFileName)
+    # nFileSize = fStat.st_size
+
+    # info = getMediaFileInfo(aFileName, nFileSize)
+    # print(info)
+    # s = generateThumbailImage(1, 212, aFileName, info["orientation"], info["width"], info["height"], info["type"], 0)
+    s = generateThumbailImage(1, 21, "/Users/terry/temp/myTest/IMG_1953.JPG", 6, 2448, 3264, 1, 0)
+    print(s)

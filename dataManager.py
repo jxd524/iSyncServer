@@ -18,14 +18,14 @@ from unit import makeValue
 方便定义字段序号
 for easily define db table field index
 """
-__gFieldIndex = 0;
+__gFieldIndex = 0
 def __incFieldWithInit(aInit=None):
-    global __gFieldIndex;
+    global __gFieldIndex
     if aInit:
-        __gFieldIndex = 0;
-    nResult = __gFieldIndex;
-    __gFieldIndex += 1;
-    return nResult;
+        __gFieldIndex = 0
+    nResult = __gFieldIndex
+    __gFieldIndex += 1
+    return nResult
 
 
 """
@@ -34,15 +34,15 @@ def __incFieldWithInit(aInit=None):
 
 user table
 """
-_kUserTableName = "User";
-kUserFieldId                        = __incFieldWithInit(True);   #ID
-kUserFieldName                      = __incFieldWithInit(); #用户名
-kUserFieldPassword                  = __incFieldWithInit(); #用户密码
-kUserFieldCreateTime                = __incFieldWithInit(); #创建时间
-kUserFieldLastLoginDate             = __incFieldWithInit(); #最后登陆时间
-kUserFieldLastModifyTime            = __incFieldWithInit(); #针对HelpInfo,最后修改时间
-kUserFieldHelpInt                   = __incFieldWithInit(); #辅助Int,只对客户端有意义,服务端只负责保存
-kUserFieldHelpText                  = __incFieldWithInit(); #辅助信息,只对客户端有意思
+_kUserTableName = "User"
+kUserFieldId                        = __incFieldWithInit(True)   #ID
+kUserFieldName                      = __incFieldWithInit() #用户名
+kUserFieldPassword                  = __incFieldWithInit() #用户密码
+kUserFieldCreateTime                = __incFieldWithInit() #创建时间
+kUserFieldLastLoginDate             = __incFieldWithInit() #最后登陆时间
+kUserFieldLastModifyTime            = __incFieldWithInit() #针对HelpInfo,最后修改时间
+kUserFieldHelpInt                   = __incFieldWithInit() #辅助Int,只对客户端有意义,服务端只负责保存
+kUserFieldHelpText                  = __incFieldWithInit() #辅助信息,只对客户端有意思
 def _UserCreateTableSQL():
     """
     创建用户表的SQL语句
@@ -52,28 +52,28 @@ def _UserCreateTableSQL():
                 id integer primary key autoIncrement,
                 name varchar(100) collate nocase UNIQUE,
                 password varchar(32),
-                createTime timestamp default(0),
-                lastLoginDate timestamp default(0),
-                lastModifyTime timestamp default 0,
+                createTime timestamp default(datetime('now', 'localtime')),
+                lastLoginDate timestamp default(datetime('now', 'localtime')),
+                lastModifyTime timestamp default(datetime('now', 'localtime')),
                 helpInt integer,
                 helpText text
-            )""" % _kUserTableName;
+            )""" % _kUserTableName
 
 
 """
 目录表
 """
-_kCatalogTableName = "Catalog";
-kCatalogFieldId             = __incFieldWithInit(True); #ID
-kCatalogFieldPath           = __incFieldWithInit(); #具体全路径
-kCatalogFieldRootId         = __incFieldWithInit(); #根路径ID
-kCatalogFieldParentId       = __incFieldWithInit(); #父路径ID
-kCatalogFieldName           = __incFieldWithInit(); #在客户端显示的名称
-kCatalogFieldCreateTime     = __incFieldWithInit(); #记录创建时间
-kCatalogFieldLastModifyTime = __incFieldWithInit(); #记录最后修改时间
-kCatalogFieldMemo           = __incFieldWithInit(); #备注
-kCatalogFieldHelpInt        = __incFieldWithInit(); #辅助信息,只为客户端保存
-kCatalogFieldHelpText       = __incFieldWithInit(); #辅助信息,只为客户端保存
+_kCatalogTableName = "Catalog"
+kCatalogFieldId             = __incFieldWithInit(True) #ID
+kCatalogFieldPath           = __incFieldWithInit() #具体全路径
+kCatalogFieldRootId         = __incFieldWithInit() #根路径ID
+kCatalogFieldParentId       = __incFieldWithInit() #父路径ID
+kCatalogFieldName           = __incFieldWithInit() #在客户端显示的名称
+kCatalogFieldCreateTime     = __incFieldWithInit() #记录创建时间
+kCatalogFieldLastModifyTime = __incFieldWithInit() #记录最后修改时间
+kCatalogFieldMemo           = __incFieldWithInit() #备注
+kCatalogFieldHelpInt        = __incFieldWithInit() #辅助信息,只为客户端保存
+kCatalogFieldHelpText       = __incFieldWithInit() #辅助信息,只为客户端保存
 def _CatalogCreateTableSQL():
     "创建目录表SQL语句"
     return """Create Table if not exists %s(
@@ -82,40 +82,40 @@ def _CatalogCreateTableSQL():
                 rootId  integer,
                 parentId integer,
                 name varchar(100) collate nocase,
-                createTime timestamp default 0,
-                lastModifyTime timestamp default 0,
+                createTime timestamp default(datetime('now', 'localtime')),
+                lastModifyTime timestamp default(datetime('now', 'localtime')),
                 memo varchar(1024),
                 helpInt integer,
                 helpText text
-            )""" % _kCatalogTableName;
+            )""" % _kCatalogTableName
 
 
 """
 文件表
 """
-_kFileTableName = "Files";
-kFileFieldId                    = __incFieldWithInit(True); #ID
-kFileFieldRootCatalogId         = __incFieldWithInit(); #所属根目录ID
-kFileFieldCatalogId             = __incFieldWithInit(); #对应的路径ID,此值可被修改
-kFileFieldRealCatalogId         = __incFieldWithInit(); #对应的路径ID,此值不被修改,指明实际的位置
-kFileFieldFileName              = __incFieldWithInit(); #文件名称,不包括路径
-kFileFieldName                  = __incFieldWithInit(); #显示名称,默认为空
-kFileFieldCreateTime            = __incFieldWithInit(); #创建时间
-kFileFieldUploadTime            = __incFieldWithInit(); #上传时间
-kFileFieldImportTime            = __incFieldWithInit(); #导入时间
-kFileFieldLastModifyTime        = __incFieldWithInit(); #最后更新时间
-kFileFieldSize                  = __incFieldWithInit(); #文件大小
-kFileFieldType                  = __incFieldWithInit(); #文件类型,定义为: FileType
-kFileFieldDuration              = __incFieldWithInit(); #持续时间
-kFileFieldWidth                 = __incFieldWithInit(); #宽度
-kFileFieldHeight                = __incFieldWithInit(); #高度
-kFileFieldThumbFileStatus       = __incFieldWithInit(); #缩略图状态, 参考 defines.FileStatus
-kFileFieldScreenThumbFileStatus = __incFieldWithInit(); #更大的缩略图状态
-kFileFieldOriginFileStatus      = __incFieldWithInit(); #原始文件状态
-kFileFieldOrientation           = __incFieldWithInit(); #对于原始文件是图片的可能有效,表示图片方向
-kFileFieldMemo                  = __incFieldWithInit(); #备注
-kFileFieldHelpInt               = __incFieldWithInit(); #辅助信息,只为客户端保存
-kFileFieldHelpText              = __incFieldWithInit(); #辅助信息,只为客户端保存
+_kFileTableName = "Files"
+kFileFieldId                    = __incFieldWithInit(True) #ID
+kFileFieldRootCatalogId         = __incFieldWithInit() #所属根目录ID
+kFileFieldCatalogId             = __incFieldWithInit() #对应的路径ID,此值可被修改
+kFileFieldRealCatalogId         = __incFieldWithInit() #对应的路径ID,此值不被修改,指明实际的位置
+kFileFieldFileName              = __incFieldWithInit() #文件名称,不包括路径
+kFileFieldName                  = __incFieldWithInit() #显示名称,默认为空
+kFileFieldCreateTime            = __incFieldWithInit() #创建时间
+kFileFieldUploadTime            = __incFieldWithInit() #上传时间
+kFileFieldImportTime            = __incFieldWithInit() #导入时间
+kFileFieldLastModifyTime        = __incFieldWithInit() #最后更新时间
+kFileFieldSize                  = __incFieldWithInit() #文件大小
+kFileFieldType                  = __incFieldWithInit() #文件类型,定义为: FileType
+kFileFieldDuration              = __incFieldWithInit() #持续时间
+kFileFieldWidth                 = __incFieldWithInit() #宽度
+kFileFieldHeight                = __incFieldWithInit() #高度
+kFileFieldThumbFileStatus       = __incFieldWithInit() #缩略图状态, 参考 defines.FileStatus
+kFileFieldScreenThumbFileStatus = __incFieldWithInit() #更大的缩略图状态
+kFileFieldOriginFileStatus      = __incFieldWithInit() #原始文件状态
+kFileFieldOrientation           = __incFieldWithInit() #对于原始文件是图片的可能有效,表示图片方向
+kFileFieldMemo                  = __incFieldWithInit() #备注
+kFileFieldHelpInt               = __incFieldWithInit() #辅助信息,只为客户端保存
+kFileFieldHelpText              = __incFieldWithInit() #辅助信息,只为客户端保存
 def _FileCreateTableSQL():
     "创建文件表SQL语句"
     return """Create Table if not exists %s(
@@ -125,33 +125,33 @@ def _FileCreateTableSQL():
                 realCatalogId integer,
                 fileName varchar(100) collate nocase,
                 name varchar(100) collate nocase,
-                createTime timestamp,
+                createTime timestamp default(datetime('now', 'localtime')),
                 uploadTime timestamp,
                 importTime timestamp,
-                lastModifyTime timestamp,
+                lastModifyTime timestamp default(datetime('now', 'localtime')),
                 size integer,
                 type integer,
-                duration float default 0,
+                duration float,
                 width integer,
                 height integer,
-                statusForThumb char DEFAULT(0),
-                statusForScreen char DEFAULT(0),
-                statusForOrigin char,
-                orientation char default(0),
+                statusForThumb integer,
+                statusForScreen integer,
+                statusForOrigin integer,
+                orientation integer,
                 memo varchar(1024),
                 helpInt integer,
                 helpText text,
                 unique(realCatalogId, fileName)
-            )""" % _kFileTableName;
+            )""" % _kFileTableName
 
 
 """
 用户的关联表
 """
-_kUserAssociateTableName = "UserAssociate";
-kUserAssociateFieldId               = __incFieldWithInit(True); #ID
-kUserAssociateFieldUserId           = __incFieldWithInit(); #用户ID
-kUserAssociateFieldRootCatalogId    = __incFieldWithInit(); #关联的
+_kUserAssociateTableName = "UserAssociate"
+kUserAssociateFieldId               = __incFieldWithInit(True) #ID
+kUserAssociateFieldUserId           = __incFieldWithInit() #用户ID
+kUserAssociateFieldRootCatalogId    = __incFieldWithInit() #关联的
 def _UserAssociateCreateTableSQL():
     "创建用户与目录的关联表"
     return """Create Table if not exists %s(
@@ -159,7 +159,7 @@ def _UserAssociateCreateTableSQL():
                 userId integer not null,
                 rootCatalogId integer not null,
                 unique(userId, rootCatalogId)
-            )""" % _kUserAssociateTableName;
+            )""" % _kUserAssociateTableName
 
 # 后续不需要再使用此变量了
 del __gFieldIndex
@@ -175,14 +175,14 @@ class DataManager(JxdSqlDataBasic):
     def __init__(self, aFileName=None):
         "初始化"
         if aFileName is None:
-            aFileName = os.path.join(sys.path[0], "dataManager.db");
-        JxdSqlDataBasic.__init__(self, aFileName);
-        cur = self.cursor();
-        cur.execute(_UserCreateTableSQL());
-        cur.execute(_CatalogCreateTableSQL());
-        cur.execute(_UserAssociateCreateTableSQL());
-        cur.execute(_FileCreateTableSQL());
-        cur.close();
+            aFileName = os.path.join(sys.path[0], "dataManager.db")
+        JxdSqlDataBasic.__init__(self, aFileName)
+        cur = self.cursor()
+        cur.execute(_UserCreateTableSQL())
+        cur.execute(_CatalogCreateTableSQL())
+        cur.execute(_UserAssociateCreateTableSQL())
+        cur.execute(_FileCreateTableSQL())
+        cur.close()
 
 
 #public function -- User
@@ -192,41 +192,41 @@ class DataManager(JxdSqlDataBasic):
                 "name": aUserName,
                 "password": aPassword,
                 "createTime": time.time(), 
-                "lastLoginDate": time.time()};
-        nId = self.insert(_kUserTableName, fieldValues);
+                "lastLoginDate": time.time()}
+        nId = self.insert(_kUserTableName, fieldValues)
         if nId is None:
             #插入不成功,正常情况是数据已经存在
-            row = self.select(_kUserTableName, {"name": aUserName});
+            row = self.select(_kUserTableName, {"name": aUserName})
             if row is None:
-                log.logObject().log(logging.ERROR, "无法创建用户 %s" % aUserName);
-                return None;
-            nId = row[kUserFieldId];
+                log.logObject().log(logging.ERROR, "无法创建用户 %s" % aUserName)
+                return None
+            nId = row[kUserFieldId]
             if aPassword and len(aPassword) > 0 and row[kUserFieldPassword] != aPassword:
-                self.update(_kUserTableName, {"id": nId}, {"password": aPassword});
-        return nId;
+                self.update(_kUserTableName, {"id": nId}, {"password": aPassword})
+        return nId
 
 
     def getUser(self, aUserName, aPassword):
         "根据用户跟密码查询,若成功,则更新登陆时间"
-        row = self.select(_kUserTableName, {"name": aUserName, "password": aPassword});
+        row = self.select(_kUserTableName, {"name": aUserName, "password": aPassword})
         if row is None:
             #查询不到直接退出
-            return None;
+            return None
 
         #更新最后登陆时间
-        self.update(_kUserTableName, {"id": row[kUserFieldId]}, {"lastLoginDate": time.time()});
-        return row;
+        self.update(_kUserTableName, {"id": row[kUserFieldId]}, {"lastLoginDate": time.time()})
+        return row
 
 
 #public function - Catalog
     def getCatalogByPath(self, aPath):
         "根据路径,获取目录信息,不存在返回None"
-        return self.select(_kCatalogTableName, {"path": os.path.abspath(aPath)});
+        return self.select(_kCatalogTableName, {"path": os.path.abspath(aPath)})
 
 
     def getCatalogById(self, aId):
         "根据Id,获取目录信息,不存在返回None"
-        return self.select(_kCatalogTableName, {"id": aId});
+        return self.select(_kCatalogTableName, {"id": aId})
 
 
     def getCatalogByIdAndRootIds(self, aId, aLimitStrRootIds):
@@ -243,11 +243,11 @@ class DataManager(JxdSqlDataBasic):
 
 
     def getCatalogState(self, aId):
-        "获取指定目录的子目录数量,文件数量; 此SQL语句后续可优化,与getCatalogsByParentIds一起查询出来"
+        "获取指定目录的子目录数量,文件数量 此SQL语句后续可优化,与getCatalogsByParentIds一起查询出来"
         return self.fetch("""select * from
                                 (select count(1) from catalog where parentid==?),
                                 (select count(1) from files where catalogid==?)
-                """, (aId, aId));
+                """, (aId, aId))
 
 
     def makeCatalog(self, aCatalogInfo):
@@ -319,13 +319,13 @@ class DataManager(JxdSqlDataBasic):
                     aCatalogInfo["rootId"] = nNewRootId
 
         #更新Catalog表
-        afv = None; 
+        afv = None 
         if aCatalogInfo.get("lastModifyTime") == None:
-            afv = {"lastModifyTime": time.time()};
+            afv = {"lastModifyTime": time.time()}
         bOK = self.update(_kCatalogTableName, 
                 {"id": aId,
                     formatInField("rootId", aLimitStrRootIds): None},
-                aCatalogInfo, afv);
+                aCatalogInfo, afv)
 
         #更新File表
         if bOK and bUpdateFileTable:
@@ -335,18 +335,18 @@ class DataManager(JxdSqlDataBasic):
 
     def checkUpdateCatelogRootInfo(self, aUserId):
         "判断指定的用户的根目录是否需要更新,只在扫描磁盘时起作用"
-        associateRootIds = self.getUserRootCatalogs(aUserId);
+        associateRootIds = self.getUserRootCatalogs(aUserId)
         for rootId in associateRootIds:
-            catInfo = self.getCatalogById(rootId);
-            parentPath = os.path.dirname(catInfo[kCatalogFieldPath]);
-            parentCatInfo = self.getCatalogByPath(parentPath);
+            catInfo = self.getCatalogById(rootId)
+            parentPath = os.path.dirname(catInfo[kCatalogFieldPath])
+            parentCatInfo = self.getCatalogByPath(parentPath)
             if parentCatInfo:
                 self.update(_kCatalogTableName, {"id": rootId}, 
                         {"rootId": parentCatInfo[kCatalogFieldRootId],
-                            "parentId": parentCatInfo[kCatalogFieldId]});
+                            "parentId": parentCatInfo[kCatalogFieldId]})
                 self.update(_kCatalogTableName, {"rootId": rootId}, 
-                        {"rootId": parentCatInfo[kCatalogFieldRootId]});
-                self.delete(_kUserAssociateTableName, {"rootCatalogId": rootId});
+                        {"rootId": parentCatInfo[kCatalogFieldRootId]})
+                self.delete(_kUserAssociateTableName, {"rootCatalogId": rootId})
                 self.update(_kFileTableName, {"rootCatalogId": rootId}, 
                         {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
 
@@ -446,13 +446,13 @@ class DataManager(JxdSqlDataBasic):
                 aFileInfo.pop("catalogId")
 
         # 更新数据
-        afv = None;
+        afv = None
         if aFileInfo.get("lastModifyTime") == None:
-            afv = {"lastModifyTime": time.time()};
+            afv = {"lastModifyTime": time.time()}
         bOK = self.update(_kFileTableName,
                 {"id": aFileId,
                     formatInField("rootCatalogId", aLimitStrRootIds): None}, 
-                aFileInfo, afv);
+                aFileInfo, afv)
 
 
     def getFileByIdAndRootIds(self, aFileId, aRootIds):
@@ -510,26 +510,26 @@ class DataManager(JxdSqlDataBasic):
 
         #分页信息
         dbCount = self.select(_kFileTableName, where, aFields = "count(1)")
-        nItemCount = dbCount[0] if dbCount else 0;
+        nItemCount = dbCount[0] if dbCount else 0
         return fileInfos, {"pageIndex": aPageIndex,
                             "maxPerPage": nLimitCount,
-                            "pageCount": (nItemCount + nLimitCount - 1) // nLimitCount};
+                            "pageCount": (nItemCount + nLimitCount - 1) // nLimitCount}
 
 
 #public function - UserAssociate
     def makeUserAssociate(self, aUserId, aRootCatalogId):
         "插入一条关联数据"
-        return self.insert(_kUserAssociateTableName, {"userId": aUserId, "rootCatalogId": aRootCatalogId});
+        return self.insert(_kUserAssociateTableName, {"userId": aUserId, "rootCatalogId": aRootCatalogId})
 
     def getUserRootCatalogs(self, aUserId):
         "获取指定用户下所有的关联根目录ID"
-        rows = self.select(_kUserAssociateTableName, {"userId": aUserId}, "rootCatalogId", False);
+        rows = self.select(_kUserAssociateTableName, {"userId": aUserId}, "rootCatalogId", False)
         if rows:
-            result = [];
+            result = []
             for item in rows:
-                result.append(item[0]);
-            rows = result;
-        return rows;
+                result.append(item[0])
+            rows = result
+        return rows
 
 #public function - help info
     def _buildHelpQueryInfo(self, aTableType, aRecordId, aStrRootIds=None):
@@ -567,7 +567,7 @@ def buildUserInfo(aUserRow):
             "lastLoginDate": aUserRow[kUserFieldLastLoginDate],
             "lastModifyTime": aUserRow[kUserFieldLastModifyTime],
             "helpInt": aUserRow[kUserFieldHelpInt],
-            "helpText": aUserRow[kUserFieldHelpText]};
+            "helpText": aUserRow[kUserFieldHelpText]}
     unit.filterNullValue(userInfo)
     return userInfo
 
