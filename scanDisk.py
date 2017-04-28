@@ -197,7 +197,7 @@ class ScanDisk(object):
         fileInfo["createTime"] = nCreateTime
         unit.makeValue(fileInfo, "type", defines.kFileTypeFile)
         print("     %s" % strName)
-        self.dbManager.addFile(aRootId, aPathId, fileInfo, True)
+        self.dbManager.addFile(aRootId, aPathId, fileInfo)
 
 ####################end ScanDisk####################
 

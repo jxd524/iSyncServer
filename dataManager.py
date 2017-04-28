@@ -95,6 +95,7 @@ def _CatalogCreateTableSQL():
 """
 _kFileTableName = "Files"
 kFileFieldId                    = __incFieldWithInit(True) #ID
+kFileFieldUploadUserId          = __incFieldWithInit() #文件的上传者
 kFileFieldRootCatalogId         = __incFieldWithInit() #所属根目录ID
 kFileFieldCatalogId             = __incFieldWithInit() #对应的路径ID,此值可被修改
 kFileFieldRealCatalogId         = __incFieldWithInit() #对应的路径ID,此值不被修改,指明实际的位置
@@ -109,9 +110,9 @@ kFileFieldType                  = __incFieldWithInit() #文件类型,定义为: 
 kFileFieldDuration              = __incFieldWithInit() #持续时间
 kFileFieldWidth                 = __incFieldWithInit() #宽度
 kFileFieldHeight                = __incFieldWithInit() #高度
-kFileFieldThumbFileStatus       = __incFieldWithInit() #缩略图状态, 参考 defines.FileStatus
-kFileFieldScreenThumbFileStatus = __incFieldWithInit() #更大的缩略图状态
-kFileFieldOriginFileStatus      = __incFieldWithInit() #原始文件状态
+kFileFieldStatusForThumb        = __incFieldWithInit() #缩略图状态, 参考 defines.FileStatus
+kFileFieldStatusForScreen       = __incFieldWithInit() #更大的缩略图状态
+kFileFieldStatusForOrigin       = __incFieldWithInit() #原始文件状态
 kFileFieldOrientation           = __incFieldWithInit() #对于原始文件是图片的可能有效,表示图片方向
 kFileFieldMemo                  = __incFieldWithInit() #备注
 kFileFieldHelpInt               = __incFieldWithInit() #辅助信息,只为客户端保存
@@ -120,6 +121,7 @@ def _FileCreateTableSQL():
     "创建文件表SQL语句"
     return """Create Table if not exists %s(
                 id integer primary key autoIncrement,
+                uploadUserId integer,
                 rootCatalogId integer,
                 catalogId integer,
                 realCatalogId integer,
@@ -248,6 +250,15 @@ class DataManager(JxdSqlDataBasic):
                                 (select count(1) from catalog where parentid==?),
                                 (select count(1) from files where catalogid==?)
                 """, (aId, aId))
+
+
+    def getCatalogIdRelatePathInfo(self, aStrIds):
+        "获取指定id所对应的路径信息,组成 [id] = path 的格式"
+        rows = self.select(_kCatalogTableName, {formatInField("id", aStrIds): None}, "id, path", False)
+        result = {}
+        for item in rows:
+            result[item[0]] = item[1]
+        return result
 
 
     def makeCatalog(self, aCatalogInfo):
@@ -401,24 +412,20 @@ class DataManager(JxdSqlDataBasic):
                     formatInField("rootCatalogId", aLimitStrRootIds): None})
 
 
-    def addFile(self, aRootId, aRealCatalogId, aFileInfo, aFromLocal):
+    def addFile(self, aRootId, aRealCatalogId, aFileInfo):
         """添加文件信息
             直接添加,调用者必须确保键值的正确性
         """
         curTime = time.time()
-        if aFromLocal:
-            nFileStatus = defines.kFileStatusFromLocal
-            makeValue(aFileInfo, "importTime", curTime )
-        else:
-            nFileStatus = defines.kFileStatusFromUploading
         aFileInfo["rootCatalogId"] = aRootId
         aFileInfo["realCatalogId"] = aRealCatalogId
         makeValue(aFileInfo, "catalogId", aRealCatalogId)
         makeValue(aFileInfo, "createTime", curTime)
+        makeValue(aFileInfo, "importTime", curTime)
         makeValue(aFileInfo, "lastModifyTime", curTime)
-        makeValue(aFileInfo, "statusForThumb", nFileStatus)
-        makeValue(aFileInfo, "statusForScreen", nFileStatus)
-        makeValue(aFileInfo, "statusForOrigin", nFileStatus)
+        makeValue(aFileInfo, "statusForThumb", defines.kFileStatusFromLocal)
+        makeValue(aFileInfo, "statusForScreen", defines.kFileStatusFromLocal)
+        makeValue(aFileInfo, "statusForOrigin", defines.kFileStatusFromLocal)
         return self.insert(_kFileTableName, aFileInfo)
 
 
@@ -464,6 +471,21 @@ class DataManager(JxdSqlDataBasic):
         return self.select(_kFileTableName, {"id": aFileId, formatInField("rootCatalogId", aRootIds): None})
 
 
+    def getFileByUploading(self, aUploadUserId):
+        """获取指定用户未上传成功的信息
+
+        :aUploadUserId: 上传用户ID
+        """
+        values = []
+        where = {"statusForOrigin": defines.kFileStatusFromUploading,
+                "statusForThumb": defines.kFileStatusFromUploading,
+                "statusForScreen": defines.kFileStatusFromUploading}
+        values.append(aUploadUserId)
+        strWhere = "uploadUserId = ? and ({})".format(self.FormatFieldValues(where, values, "or"))
+        sql = "select * from {} where {}".format(_kFileTableName, strWhere)
+        return self.fetch(sql, values, False)
+
+
     def getFiles(self, aStrPathIds, aStrRootIds, aPageIndex, aMaxPerPage, aStrTypes, aSort):
         """查找指定路径下的文件内容
 
@@ -476,10 +498,14 @@ class DataManager(JxdSqlDataBasic):
                     >0表示升序, <0表示降序
         :returns: datelist, pageInfo
         """
+        funcNotEqual = lambda v: lambda :"{} != {}".format(v, defines.kFileStatusFromUploading)
+        strStatus = "{},{}".format(defines.kFileStatusFromLocal, defines.kFileStatusFromUploaded)
         where = {formatInField("catalogId", aStrPathIds): None,
                 formatInField("rootCatalogId", aStrRootIds): None,
-                formatInField("type", aStrTypes): None}
-
+                formatInField("type", aStrTypes): None,
+                funcNotEqual("statusForOrigin"): None,
+                funcNotEqual("statusForThumb"): None,
+                funcNotEqual("statusForScreen"): None}
         strWhere = self.FormatFieldValues(where, None, "and")
 
         if aSort != None and aSort != 0:
@@ -595,36 +621,97 @@ def buildCatalogInfo(aCatalogRow, aDbObject):
     unit.filterNullValue(catalogInfo)
     return catalogInfo
 
-def buildFileInfo(aFileRows):
+def buildFileInfo(aFileRow, aFuncForPaths):
+    """组建单个fileInfo信息, 
+    aFuncForPaths: 是一个函数,返回 {catalogId: path} 对象
+    或者直接就是一个 {catalogId: path} 对象
+    """
+    strName = aFileRow[kFileFieldName]
+    if strName is None:
+        strName = aFileRow[kFileFieldFileName]
+    fileInfo = {
+            "id": aFileRow[kFileFieldId],
+            "uploadUserId": aFileRow[kFileFieldUploadUserId],
+            "catalogId": aFileRow[kFileFieldCatalogId],
+            "name": strName,
+            "createTime": aFileRow[kFileFieldCreateTime],
+            "uploadTime": aFileRow[kFileFieldUploadTime],
+            "importTime": aFileRow[kFileFieldImportTime],
+            "lastModifyTime": aFileRow[kFileFieldLastModifyTime],
+            "size": aFileRow[kFileFieldSize],
+            "type": aFileRow[kFileFieldType],
+            "duration": aFileRow[kFileFieldDuration],
+            "width": aFileRow[kFileFieldWidth],
+            "height": aFileRow[kFileFieldHeight],
+            "orientation": aFileRow[kFileFieldOrientation],
+            "memo": aFileRow[kFileFieldMemo],
+            "helpInt": aFileRow[kFileFieldHelpInt],
+            "helpText": aFileRow[kFileFieldHelpText]}
+
+    def _addUploading(aFullFileName, aStatusFieldName, aUpSizeName):
+        fileInfo[aStatusFieldName] = defines.kFileStatusFromUploading
+        fileInfo[aUpSizeName] = os.stat(aFullFileName).st_size
+
+
+    if aFileRow[kFileFieldStatusForOrigin] == defines.kFileStatusFromUploading:
+        #原始文件上传信息
+        cp = aFuncForPaths() if callable(aFuncForPaths) else aFuncForPaths
+        fn = os.path.join(cp[aFileRow[kFileFieldRealCatalogId]], aFileRow[kFileFieldFileName])
+        _addUploading(fn, "statusForOrigin", "statusForOrigin")
+
+    if aFileRow[kFileFieldStatusForThumb] == defines.kFileStatusFromUploading:
+        #小缩略图上传信息
+        fn = unit.getFileThumbFullFileName(aFileRow[kFileFieldRealCatalogId], aFileRow[kFileFieldId], 0)
+        _addUploading(fn, "statusForThumb", "uploadingThumbSize")
+
+    if aFileRow[kFileFieldStatusForScreen] == defines.kFileStatusFromUploading:
+        #大缩略图上传信息
+        fn = unit.getFileThumbFullFileName(aFileRow[kFileFieldRealCatalogId], aFileRow[kFileFieldId], 1)
+        _addUploading(fn, "statusForScreen", "uploadingScreenSize")
+
+    unit.filterNullValue(fileInfo)
+    return fileInfo
+
+
+def buildFileInfoList(aFileRows, aDbObject):
+    """组建多个fileInfo信息, 
+    aFuncForPaths: 是一个函数,返回 {catalogId: path} 对象
+    或者直接就是一个 {catalogId: path} 对象
+    """
     result = []
+    irp = None
+    def _buildIdRelatePath():
+        #嵌套函数实现一次查询,多次使用
+        nonlocal irp
+        if not irp:
+            cids = buildCatalogIdsByFileRows(aFileRows)
+            irp = aDbObject.getCatalogIdRelatePathInfo(cids)
+        return irp
     for item in aFileRows:
-        strName = item[kFileFieldName]
-        if strName is None:
-            strName = item[kFileFieldFileName]
-        catalogItem = {
-                "id": item[kFileFieldId],
-                "catalogId": item[kFileFieldCatalogId],
-                "name": strName,
-                "createTime": item[kFileFieldCreateTime],
-                "uploadTime": item[kFileFieldUploadTime],
-                "importTime": item[kFileFieldImportTime],
-                "lastModifyTime": item[kFileFieldLastModifyTime],
-                "size": item[kFileFieldSize],
-                "type": item[kFileFieldType],
-                "duration": item[kFileFieldDuration],
-                "width": item[kFileFieldWidth],
-                "height": item[kFileFieldHeight],
-                "helpInt": item[kFileFieldHelpInt],
-                "helpText": item[kFileFieldHelpText]}
-        unit.filterNullValue(catalogItem)
-        result.append(catalogItem)
+        fileInfo = buildFileInfo(item, _buildIdRelatePath)
+        result.append(fileInfo)
+    return result
+
+
+def buildCatalogIdsByFileRows(aFileRows):
+    result = ""
+    for item in aFileRows:
+        cid = item[kFileFieldRealCatalogId]
+        if len(result) == 0:
+            result = "{}".format(cid)
+        else:
+            result += ",{}".format(cid)
     return result
 
 
 if __name__ == "__main__":
     print("begin test")
     db = DataManager()
-    print(db.getFiles("1, 2", "1,2", 0, 10, None, 0))
+    rows = db.getFileByUploading(1)
+    print(buildFileInfoList(rows, db))
+    # print(db.buildCatalogPathInfo("1, 3,6"))
+    # print(db.getFileByUploading(1))
+    # print(db.getFiles("1, 2", "1,2", 0, 10, None, 0))
     # db.updateFile(20, {"name": "myTest", "catalogId":5}, "1,2")
     # print(db.getFileByRealCatalogId(1, "a2.mp3"))
     # db.deleteCatalogs("3, 4,5", "1,2,3")

@@ -25,9 +25,12 @@ excerpt: iSync iPrivate 文件管理 同步 云盘
 
 
 # 安装
+
 后续再作说明
 
+
 # App配置文件
+
 若没有配置文件,则使用默认值
 **appConfigs.json**: 配置整个服务器的变量.以下内容有效
 
@@ -39,8 +42,8 @@ excerpt: iSync iPrivate 文件管理 同步 云盘
 **onlineTimeout**: 在线人数极值,超过此值,则会进行超时处理,默认100
 **onlineTimeout**: 在线用户无活动保持的最大时间,默认 3600, 单位: 秒
 
-<span id="scanDisk"/>
 
+<span id="scanDisk"/>
 # 扫描数据(附加功能)
 
 如果不想将已有文件加入到系统,可不理会此功能
@@ -93,7 +96,9 @@ PS:
 **paths**: 定义要扫描的路径信息
 **mergeRootPaths**: 对已经加入到数据库中的路径进行判断,将数据库中的 RootPath 与计算机文件系统路径相一致.默认为 True
 
+
 # 服务端数据结构说明
+
 服务端只用了4张表来对数据做记录,具体定义,可参考源代码.这里只做了简单说明
 1. User: 用户表
 2. Catalog: 目录表,记录目录的相关信息
@@ -109,6 +114,7 @@ PS:
 定义接口的请求与响应,若无说明,则
 1. 请求与响应都是通过**JSON**格式进行交互
 2. 接口都需要**登陆**后才能使用
+
 
 ## 命令响应返回格式：
 
@@ -143,6 +149,25 @@ typedef datetime float
 | UIImageOrientationDownMirrored | 4 | 垂直翻转 |
 | UIImageOrientationLeftMirrored | 5 | 顺时针90°+水平翻转 |
 | UIImageOrientationRightMirrored | 7 | 顺时针90°+垂直翻转 |
+
+<span id="fileStatus">**fileStatus**</span>: 文件状态
+标志文件是否已经存在,使用[scanDisk](#scanDisk)时,使用的状态的:kFileStatusFromLocal
+当需要服务端生成缩略图时,其相应字段需要设置为 kFileStatusFromLocal,否则不进行缩略图生成
+```basic
+kFileStatusFromLocal        = 0 # 来自本地
+kFileStatusBuildError       = 1 # 本地生成时出错
+kFileStatusFromUploading    = 2 # 来自上传
+kFileStatusFromUploaded     = 3 # 来自上传,并且已经上传完成```
+
+数据库Files表字段说明: 
+√ 表示可能的值
+
+| 字段名 | 字段含义 | kFileStatusFromLocal | kFileStatusBuildError | kFileStatusFromUploading | kFileStatusFromUploaded |
+| ------ | ------ | ------ | ------ | ------ | ------ |
+| statusForOrigin | 原始文件 | √(已存在,一般由[scanDisk](#scanDis)设置) | | √(等待上传) | √(已经上传成功) |
+| statusForThumb  | 小缩略图,[参考](#thumbnail) | √(服务端根据原始文件自动) | √(服务端生成失败)  | √(等待上传) | √(上传成功) |
+| statusForScreen | 大缩略图,[参考](#thumbnail) | √ | √  | √ | √ |
+
 
 <span id="fileType">**fileType**</span>: 媒体类型定义
 
@@ -196,6 +221,7 @@ kFileTypeFile       = 1 << 4
 ```json
 {
     "id": 123,
+    "uploadUserId": 1,
     "catalogId": 1,
     "name": "display name",
     "createTime": 123123,
@@ -210,9 +236,18 @@ kFileTypeFile       = 1 << 4
     "orientation": 0,
     "memo": "jjjj",
     "helpInt": 12,
-    "helpText": "XXXX"
+    "helpText": "XXXX",
+    "uploadingThumbSize": 0,
+    "uploadingScreenSize": 0,
+    "uploadingOriginSize": 0
 }
 ```
+
+status和uploading会根据当前的[fileType](#fileType)进行返回
+若为 kFileStatusFromLocal 或 kFileStatusFromUploaded 则不会返回相对应的字段
+只有当状态为 kFileStatusFromUploading 时, 才会返回 uploading 的数量
+比如: statusForThumb == kFileStatusFromUploading 时,
+则 uploadingThumbSize 表示已上传的字节数
 
 <span id="pageInfo">**PageInfo**</span>: 分页信息
 ```json
@@ -226,6 +261,7 @@ kFileTypeFile       = 1 << 4
 ## 帐户相关接口
 
 ### login.icc 登陆
+
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -235,7 +271,9 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | **[UserInfo](#userInfo)** |
 
+
 ### logout.icc 退出
+
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -243,6 +281,7 @@ kFileTypeFile       = 1 << 4
 | 不需要 | ||
 |||
 | 响应Data | 无 |
+
 
 ## HelpInfo 相关接口
 
@@ -257,6 +296,7 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | **[HelpInfo](#helpInfo)** |
 
+
 ### updateHelpInfo.icc 设置指定记录的辅助信息
 
 | 请求方法 | POST |
@@ -270,6 +310,7 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | 无 |
 
+
 ## 目录相关接口
 
 ### catalogs.icc 获取指定目录下的信息
@@ -282,7 +323,9 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | array of **[CatalogInfo](#catalogInfo)** |
 
+
 ### createCatalog.icc 创建目录
+
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -297,7 +340,9 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | **[CatalogInfo](#catalogInfo)** |
 
+
 ### deleteCatalog.icc 删除目录
+
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -306,7 +351,9 @@ kFileTypeFile       = 1 << 4
 |||
 | 响应Data | "提示信息" |
 
+
 ### updateCatalog.icc 更新目录信息
+
 | 请求方法 | POST |
 | -------- | --- |
 |||
@@ -324,6 +371,9 @@ kFileTypeFile       = 1 << 4
 ## 文件相关接口
 
 ### 请求指定目录下的数据: files.icc
+
+此操作中会返回[fileStatus](#fileStatus)为 kFileStatusFromLocal 和 kFileStatusFromUploaded 的内容
+
 | 请求方法 | GET |
 | -------- | --- |
 |||
@@ -355,8 +405,13 @@ kFileTypeFile       = 1 << 4
     "page": {[pageInfo](#pageInfo)}
 }
 
+<span id="thumbnail"/>
 
-## 请求指定文件的缩略图: thumbnail.icc
+### 请求指定文件的缩略图: thumbnail.icc
+
+此接口会判断相关[fileStatus](#fileStatus)来确认是否自动生成缩略图,
+在[上传接口](#uploadFileInfo)上需要设置好 **statusForThumb**, **statusForScreen**
+
 | 请求方法 | GET |
 | -------- | --- |
 |||
@@ -365,7 +420,6 @@ kFileTypeFile       = 1 << 4
 | level | int | [缩略图等级](#thumbnailInfo),默认为: 0 |
 |||
 | 响应Data | 图片数据或JSON数据(出错) |
-
 
 <span id="thumbnailInfo">缩略图说明</span>
 
@@ -384,26 +438,29 @@ kFileTypeFile       = 1 << 4
 | 3 | 客户端上传完成 |
 
 
-
-## 请求指定的文件: downFile.icc
-下载指定的资源
+### 请求指定的文件: downFile.icc
 
 | 请求方法 | GET |
 | -------- | --- |
-| 请求参数 | id |
-| 参数类型 | int |
-| 响应内容 | 文件内容 |
+|||
+| 请求参数 | 类型 | 说明 |
+| id | int | 文件Id |
+|||
+| 响应Data | 文件内容 |
 
 
-## 请求指定的文件地址: shareFileUrl.icc
+
+### 请求指定的文件地址: shareFileUrl.icc
 
 获取指定资源的分享HTTP 地址
 
 | 请求方法 | GET |
 | -------- | --- |
-| 请求参数 | id |
-| 参数类型 | int |
-| 响应内容 | 资源地址(有效时间由appConfig.json配置) |
+|||
+| 请求参数 | 类型 | 说明 |
+| id | int | 文件Id |
+|||
+| 响应Data | 资源地址(有效时间由appConfig.json配置) |
 
 ```json
 {
@@ -412,40 +469,66 @@ kFileTypeFile       = 1 << 4
 ```
 
 
-## 获取用户分享的文件: shareFile.icc
+### 获取用户分享的文件: shareFile.icc
 
 此接口**不需要**用户已经**登录**,只要共享标志已经缓存在服务器就可以下载
 支持Http的单Range协议
 
 | 请求方法 | GET |
 | -------- | --- |
-| 请求参数 | shareKey |
-| 参数类型 | string |
-| 响应内容 | 资源内容 |
+|||
+| 请求参数 | 类型 | 说明 |
+| shareKey | string | 分享标志,由shareFileUrl.icc返回 |
+|||
+| 响应Data | 资源内容 |
 
 
+<span id="uploadFileInfo"/>
 
-## 上传文件信息
+### 上传文件信息: uploadFileInfo.icc
+
+上传文件时,先上传其信息,再上传文件内容
+服务端在需要时自动生成缩略图时的相关信息,请参考: [获取缩略图](#thumbnail)
  
 | 请求方法 | POST |
 | -------- | --- |
 |||
 | 请求参数 | 类型 | 说明 |
-| cid | int | 文件存在的路径ID |
+| cid | int | 文件所属路径ID |
 | name | string | 文件显示名称 |
 | size | int | 文件大小 |
-| type | int | 文件类型 |
-| createTime | double | 可选, 创建时间 |
-| importTime | double | 可选, 导入时间 |
-| duration | double | 可选,持续时间,视频与GIF有效 |
+| type | [fileType](#fileType) | 文件类型 |
+| [statusForThumb](#fileStatus) | int | 可选,缩略图生成方式,<br>默认值是kFileStatusFromLocal,表示由服务器从本地原文件自动生成<br>可选值为 kFileStatusFromUploading,表示后续由客户端[上传](#uploadFile) |
+| [statusForScreen](#fileStatus) | int | 与 statusForThumb 含义相同 |
+| createTime | [datetime](#datetime) | 可选, 创建时间 |
+| importTime | [datetime](#datetime) | 可选, 导入时间 |
+| lastModifyTime | [datetime](#datetime) | 可选, 最后修改时间 |
+| duration | float | 可选,持续时间,视频与GIF有效 |
 | width | int | 可选,宽度 |
 | height | int |  可选,高度 |
-| orientation | int |  可选,方向,图片有效 |
+| [orientation](#orientation) | int |  可选,媒体方向,若需要服务端生成缩略图,此值必须为有效值 |
 | memo | string |  可选,备注,最长 1024 |
 | helpInt | int | 可选,辅助信息 |
 | helpText | string | 可选, 辅助信息 |
 |||
-| 响应Data | **FileInfo**|
+| 响应Data | [FileInfo](#fileInfo) |
+
+
+### 获取当前正在上传的信息: uploadingInfo.icc
+
+| 请求方法 | GET |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| 无 | | |
+|||
+| 响应Data | array of [fileInfo](#fileInfo) |
+
+
+<span id="uploaodFile">
+### 上传文件: uploadFile.icc
+
+
 
 ## 获取上传文件当前进度
 | 请求方法 | GET |

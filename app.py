@@ -233,7 +233,6 @@ def appGetCatalogs():
         ltData.append(dataManager.buildCatalogInfo(item, db))
     return responseHelp.buildSuccessResponseData(ltData)
 
-
 @app.route("/createCatalog.icc", methods=["POST"])
 def appCreateCatalog():
     "创建目录"
@@ -331,10 +330,10 @@ def appGetFiles():
 
     # 查询数据
     db = _getDbManager();
-    dbItems, pageInfo = db.getFiles(param["pids"], loginInfo.rootIdsString, param["pageIndex"], param["maxPerPage"], param["types"], param["sort"])
+    fileRows, pageInfo = db.getFiles(param["pids"], loginInfo.rootIdsString, param["pageIndex"], param["maxPerPage"], param["types"], param["sort"])
 
     #生成数据
-    ltData = dataManager.buildFileInfo(dbItems)
+    ltData = dataManager.buildFileInfoList(fileRows, None)
     return responseHelp.buildSuccessResponseData({"list": ltData, "page": pageInfo});
 
 
@@ -352,57 +351,152 @@ def appGetThumb():
     strFile = param["_x_file"]
     dbFile = param["_x_fileInfo"]
 
-    #根据参数生成缩略图
-    nId = dbFile[dataManager.kFileFieldId]
-    nWidth = dbFile[dataManager.kFileFieldWidth]
-    nHeight = dbFile[dataManager.kFileFieldHeight]
-    nType = dbFile[dataManager.kFileFieldType]
-    nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
-    nOrientation = dbFile[dataManager.kFileFieldOrientation]
-    strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nOrientation, nWidth, nHeight, nType, nLevel)
+    nErrorCode = None
+    nOrigFileStatus = dbFile[dataManager.kFileFieldStatusForOrigin]
+    nStatus = dbFile[dataManager.kFileFieldStatusForThumb] if nLevel == 0 else\
+            dbFile[dataManager.kFileFieldStatusForScreen]
+    if nStatus == defines.kFileStatusFromLocal:
+        #本地生成缩略图
+        if nOrigFileStatus in (defines.kFileStatusFromLocal, defines.kFileStatusFromUploaded):
+            #根据参数生成缩略图
+            nId = dbFile[dataManager.kFileFieldId]
+            nWidth = dbFile[dataManager.kFileFieldWidth]
+            nHeight = dbFile[dataManager.kFileFieldHeight]
+            nType = dbFile[dataManager.kFileFieldType]
+            nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
+            nOrientation = dbFile[dataManager.kFileFieldOrientation]
+            strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nOrientation, nWidth, nHeight, nType, nLevel)
+            if not strFileOut or not os.path.isfile(strFileOut):
+                #无法生成缩略图
+                nErrorCode = responseHelp.kCmdUserError_BuildThumbFailed
+                field = "statusForThumb" if nLevel == 0 else "statusForScreen"
+                _getDbManager().updateFile(nId, {field: defines.kFileStatusBuildError})
+        else:
+            nErrorCode = kCmdUserError_WaitUploading
+    elif nStatus == defines.kFileStatusFromUploaded:
+        #客户端上传,直接发送
+        nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
+        nId = dbFile[dataManager.kFileFieldId]
+        strFileOut = unit.getFileThumbFullFileName(nCatalogId, nId, nLevel)
+    elif nStatus == defines.kFileStatusBuildError:
+        #本地生成错误
+        nErrorCode = responseHelp.kCmdUserError_BuildThumbFailed
+    elif nStatus == defines.kFileStatusFromUploading:
+        nErrorCode = responseHelp.kCmdUserError_WaitUploading
 
     #发送数据
+    if nErrorCode != None:
+        return responseHelp.buildErrorResponseData(nErrorCode, 404)
     return responseHelp.sendFile(strFileOut);
+
 
 @app.route("/downFile.icc")
 def appDownFile():
     "下载指定ID的资源"
-    strFileName, _, errResponse = getResOnResponse(None, None);
-    if strFileName is None:
-        return errResponse;
-    return responseHelp.sendFile(strFileName);
+    result = _getFileInfo(None, None)
+    if not result[kParamForResult]:
+        errResponse = result[kParamForErrorResponse]
+        errResponse.status_code = result[kParamForErrorRealCode]
+        return errResponse
+
+    param = result[kParamForRequestParams]
+    strFile = param["_x_file"]
+    return responseHelp.sendFile(strFile, 404);
 
 
 @app.route("/shareFileUrl.icc")
 def appShareFileUrl():
     "获取指定资源的分享KEY"
-    strFileName, _, errResponse = getResOnResponse(None, 200);
-    if strFileName is None:
-        return errResponse;
+    result = _getFileInfo(None, None)
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-    key = hashlib.md5(strFileName.encode("utf8")).hexdigest();
-    appCache.getAppFileCache().set(key, strFileName);
-    return responseHelp.buildSuccessResponseData(key);
+    param = result[kParamForRequestParams]
+    strFile = param["_x_file"]
+    key = hashlib.md5(strFile.encode("utf8")).hexdigest()
+    cache.getAppFileCache().set(key, strFile)
+    return responseHelp.buildSuccessResponseData(key)
+
 
 @app.route("/shareFile.icc")
 def appGetShareFile():
     "根据分享的KEY获取文件内容"
-    try:
-        strKey = request.values.get("shareKey");
-    except Exception as e:
-        strKey = None;
+    result = checkApiParam(False, ("shareKey",))
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
 
-    if strKey:
-        strFileName = appCache.getAppFileCache().get(strKey);
-        if strFileName:
-            #成功
-            return responseHelp.sendFile(strFileName);
+    param = result[kParamForRequestParams]
+    strFileName = cache.getAppFileCache().get(param["shareKey"])
+    print(strFileName)
+    return responseHelp.sendFile(strFileName) if strFileName else \
+            responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
 
-    return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
+
+@app.route("/uploadFileInfo.icc", methods=["POST"])
+def appUploadFileInfo():
+    "上传文件信息"
+    funcCheckStatus = lambda v: int(v) if int(v) in (defines.kFileStatusFromLocal, defines.kFileStatusFromUploading) else defines.kFileStatusFromLocal
+    curDateTime = datetime.datetime.now()
+    result = checkApiParam(True, (
+        {"name": "cid", "checkfunc": unit.checkParamForInt},
+        {"name": "name", "checkfunc": lambda v: v if len(v) > 0 and len(v) <= 100 else None},
+        {"name": "size", "checkfunc": unit.checkParamForInt},
+        {"name": "type", "checkfunc": unit.checkParamForFileType},
+        {"name": "statusForThumb", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
+        {"name": "statusForScreen", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
+        {"name": "createTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "importTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "lastModifyTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "duration", "checkfunc": lambda v: float(v), "default": None},
+        {"name": "width", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "height", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "orientation", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "memo", "checkfunc": unit.checkParamForLess1024, "default": None},
+        {"name": "helpInt", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "helpText", "default": None},))
+
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nCatalogId = param.pop("cid")
+    #目录信息
+    db = _getDbManager()
+    catalogRow = db.getCatalogByIdAndRootIds(nCatalogId, loginInfo.rootIdsString)
+    if not catalogRow:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+
+    strFileName = unit.buildOriginFileName(catalogRow[dataManager.kCatalogFieldPath], param["name"])
+    param["uploadUserId"] = loginInfo.userId
+    param["fileName"] = strFileName
+    param["statusForOrigin"] = defines.kFileStatusFromUploading
+    nNewFileId = db.addFile(catalogRow[dataManager.kCatalogFieldRootId], nCatalogId, param)
+    fileRow = db.getFileByIdAndRootIds(nNewFileId, None)
+    return responseHelp.buildSuccessResponseData(dataManager.buildFileInfo(fileRow))
+
+
+@app.route("/uploadingInfo.icc", methods=["GET"])
+def appUploadingInfo():
+    "获取所有正在上传的文件"
+    result = checkApiParam(True, ())
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+    loginInfo = result[kParamForLoginInfo]
+    # 查询数据
+    db = _getDbManager();
+    fileRows = db.getFileByUploading(loginInfo.userId)
+
+    #生成数据
+    ltData = dataManager.buildFileInfoList(fileRows, db)
+    return responseHelp.buildSuccessResponseData(ltData)
+
 
 @app.route("/uploadFile.icc", methods=["POST"])
 def appUploadFile():
     print('new request')
+    print(request.args)
+    return "xxxxx"
 
     def custom_stream_factory(total_content_length, content_type, filename, content_length=None):
         print("total_content_length: ", total_content_length);
@@ -412,12 +506,7 @@ def appUploadFile():
         print("start receiving file ... filename => " + str(tmpfile.name))
         return tmpfile
 
-    loginInfo = getCurLoginInfo();
-    if loginInfo:
-        print("login ok")
-    else:
-        print("not login");
-    print(1);
+
     stream,form,files = werkzeug.formparser.parse_form_data(request.environ, stream_factory=custom_stream_factory)
     total_size = 0
 
@@ -442,10 +531,6 @@ def appUploadFile():
         fileObject.save(strFullFileName);
     return "finished"
 
-def myTest(aInput):
-    return aInput
-def checkTest(aInput):
-    return True;
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", threaded=True, debug=True);

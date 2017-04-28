@@ -225,7 +225,8 @@ def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrientation, aOrgWid
     :returns: 成功时返回文件路径,失败则返回None
 
     """
-    strOutFile, nMaxSize = getFileThumbFileInfo(aCatalogId, aFileId, aLevel)
+    nMaxSize = defines.kThumbnailImageMaxSize if aLevel == 0 else defines.kScreenThumbnailImageMaxSize
+    strOutFile = getFileThumbFullFileName(aCatalogId, aFileId, aLevel)
     if os.path.isfile(strOutFile):
         return strOutFile
 
@@ -264,6 +265,19 @@ def checkParamForInt(aParam):
     return int(aParam)
 
 
+def checkParamForFileType(aParam):
+    t = int(aParam)
+    return t if t in (defines.kFileTypeImage, defines.kFileTypeGif, 
+            defines.kFileTypeVideo, defines.kFileTypeAudio, defines.kFileTypeFile) else None
+
+def checkParamForLess100(aParam):
+    return aParam if len(aParam) <= 100 else None
+
+
+def checkParamForLess1024(aParam):
+    return aParam if len(aParam) <= 1024 else None
+
+
 def checkParamForIntList(aParam):
     "检查是否为一个Int的列表: 1, 2, 4"
     intList = list(map(int, aParam.split(",")))
@@ -280,11 +294,11 @@ def makeUserCreateCatalogPath(aParentPath, aName):
     nRandom = 123
     while True:
         nRandom += 8
-        strDirName = "{}{}{}".format(datetime.datetime.now(), nRandom, aName)
+        strFileName = "{}{}{}".format(datetime.datetime.now(), nRandom, aName)
         md5 = hashlib.md5()
-        md5.update(strDirName.encode("utf8"))
-        strDirName = md5.hexdigest()
-        strPath = os.path.join(aParentPath, strDirName)
+        md5.update(strFileName.encode("utf8"))
+        strFileName = md5.hexdigest()
+        strPath = os.path.join(aParentPath, strFileName)
         if not os.path.isdir(strPath):
             break
     try:
@@ -294,9 +308,11 @@ def makeUserCreateCatalogPath(aParentPath, aName):
         print(e)
     return None
 
+
 def formatInField(aName, aValue):
     "格式SQL的in查询字段"
     return (lambda :"{} in ({})".format(aName, aValue)) if aValue != None else None
+
 
 def makeValue(aDict, aKey, aDefaultValue):
     "确保容器存在指定key,value"
@@ -304,12 +320,14 @@ def makeValue(aDict, aKey, aDefaultValue):
     if v == None:
         aDict[aKey] = aDefaultValue
 
+
 def removePath(aPath):
     import subprocess
     subprocess.Popen("rm -rf '{}'".format(aPath), shell=True)
 
-def getFileThumbFileInfo(aCatalogId, aFileId, aLevel):
-    "根据目录,文件,生成对应的缩略图位和最大值"
+
+def getFileThumbFullFileName(aCatalogId, aFileId, aLevel):
+    "根据目录,文件,生成对应的缩略图位置"
     strRootPath = configs.thumbPath()
     result = os.path.join(strRootPath, "{}".format(aCatalogId))
     if not os.path.isdir(result):
@@ -317,14 +335,30 @@ def getFileThumbFileInfo(aCatalogId, aFileId, aLevel):
             os.makedirs(result)
         except Exception as e:
             return None, 0
-    if aLevel == 0:
-        return os.path.join(result, "thumb_{}".format(aFileId)), defines.kThumbnailImageMaxSize
-    else:
-        return os.path.join(result, "thumbScreen_{}".format(aFileId)), defines.kScreenThumbnailImageMaxSize
+    name = "thumb_{}".format(aFileId) if aLevel == 0 else "thumbScreen_{}".format(aFileId)
+    return os.path.join(result, name)
 
+
+def buildOriginFileName(aCatalogPath, aDisplayName):
+    nRandom = 882
+    while True:
+        nRandom += 3
+        strFileName = "{}{}{}".format(datetime.datetime.now(), nRandom, aDisplayName)
+        md5 = hashlib.md5()
+        md5.update(strFileName.encode("utf8"))
+        strFileName = md5.hexdigest()
+        strFullFileName = os.path.join(aCatalogPath, strFileName)
+        try:
+            with open(strFullFileName, "x") as f:
+                return strFileName
+        except Exception as e:
+            pass
 
 if __name__ == "__main__":
     pass
+    s = buildOriginFileName("/Users/terry/work/terry/iSyncServer", "add")
+    print(s)
+
     # aFileName = "/Users/terry/temp/myTest/IMG_1953.JPG"
     # fStat = os.stat(aFileName)
     # nFileSize = fStat.st_size
@@ -332,5 +366,5 @@ if __name__ == "__main__":
     # info = getMediaFileInfo(aFileName, nFileSize)
     # print(info)
     # s = generateThumbailImage(1, 212, aFileName, info["orientation"], info["width"], info["height"], info["type"], 0)
-    s = generateThumbailImage(1, 21, "/Users/terry/temp/myTest/IMG_1953.JPG", 6, 2448, 3264, 1, 0)
-    print(s)
+    # s = generateThumbailImage(1, 21, "/Users/terry/temp/myTest/IMG_1953.JPG", 6, 2448, 3264, 1, 0)
+    # print(s)

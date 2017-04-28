@@ -40,6 +40,8 @@ kCmdUserError_NotResource               = -10004
 kCmdUserError_ErrorFileTypeForOpt       = -10005
 kCmdUserError_ResourceHasBeenRemove     = -10006
 kCmdUserError_CatalogIdInValid          = -10007
+kCmdUserError_BuildThumbFailed          = -10008
+kCmdUserError_WaitUploading             = -10009
 
 
 kCmdErrorMessags = {
@@ -51,6 +53,8 @@ kCmdErrorMessags = {
         kCmdUserError_ErrorFileTypeForOpt: "文件类型无法执行此操作",
         kCmdUserError_ResourceHasBeenRemove: "指定资源已经被删除",
         kCmdUserError_CatalogIdInValid: "无效的目录Id",
+        kCmdUserError_BuildThumbFailed: "无法生成缩略图",
+        kCmdUserError_WaitUploading: "等待上传",
 
         kCmdServerError_NotSetRootPath: "服务端必须设置根目录",
         kCmdServerError_FormatData: "服务器对数据格式时出错",
@@ -133,7 +137,7 @@ def sendFile(aStrFileName, aErrorStatusCode=200):
                 "Etag": "%d" % nFileSize});
     return resp
 
-def checkApiParam(aNeedLogin, aParams):
+def checkApiParamWithRequestValues(aNeedLogin, aParams, aRequestValues):
     """判断Api参数信息是否正确
 
     :aNeedLogin: 是否需要登陆才能使用
@@ -201,9 +205,12 @@ def checkApiParam(aNeedLogin, aParams):
         return False, buildErrorResponseData(kCmdUserError_Param), 417
 
 
+def checkApiParam(aNeedLogin, aParams):
+    requestValue = request.get_json(True, True, False) if request.is_json else request.values
+    checkApiParamWithRequestValues(aNeedLogin, aParam, requestValue)
+
+
 if __name__ == "__main__":
-    s = [];
-    l = None;
-    s.append(100);
-    s.insert(0, l);
-    print(s);
+    a = ()
+    for item in a:
+        print(item)
