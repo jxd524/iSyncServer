@@ -462,13 +462,29 @@ class DataManager(JxdSqlDataBasic):
                 aFileInfo, afv)
 
 
-    def getFileByIdAndRootIds(self, aFileId, aRootIds):
+    def getFileByIdAndRootIds(self, aFileId, aLimitStrRootIds):
         """获取指定 Id 的文件信息
 
         :aFileId: 文件 Id
-        :aRootIds: 根目录IDs
+        :aLimitStrRootIds: 根目录IDs
         """
-        return self.select(_kFileTableName, {"id": aFileId, formatInField("rootCatalogId", aRootIds): None})
+        return self.select(_kFileTableName, {"id": aFileId, formatInField("rootCatalogId", aLimitStrRootIds): None})
+
+
+    def deleteFiles(self, aIds, aLimitStrRootIds):
+        "删除指定的文件"
+        where = {formatInField("id", aIds): None, 
+                    formatInField("rootCatalogId", aLimitStrRootIds): None}
+        rows = self.select(_kFileTableName, where, aOneRecord = False)
+
+        cids = buildCatalogIdsByFileRows(rows)
+        irp = self.getCatalogIdRelatePathInfo(cids)
+
+        for item in rows:
+            strFile = os.path.join(irp[item[kFileFieldRealCatalogId]], item[kFileFieldFileName])
+            unit.removePath(strFile)
+
+        self.delete(_kFileTableName, where)
 
 
     def getFileByUploading(self, aUploadUserId):
@@ -648,26 +664,25 @@ def buildFileInfo(aFileRow, aFuncForPaths):
             "helpInt": aFileRow[kFileFieldHelpInt],
             "helpText": aFileRow[kFileFieldHelpText]}
 
-    def _addUploading(aFullFileName, aStatusFieldName, aUpSizeName):
-        fileInfo[aStatusFieldName] = defines.kFileStatusFromUploading
-        fileInfo[aUpSizeName] = os.stat(aFullFileName).st_size
-
+    def _addUploading(aFullFileName, aUpSizeName):
+        nSize = os.stat(aFullFileName).st_size if os.path.isfile(aFullFileName) else 0
+        fileInfo[aUpSizeName] = nSize
 
     if aFileRow[kFileFieldStatusForOrigin] == defines.kFileStatusFromUploading:
         #原始文件上传信息
         cp = aFuncForPaths() if callable(aFuncForPaths) else aFuncForPaths
         fn = os.path.join(cp[aFileRow[kFileFieldRealCatalogId]], aFileRow[kFileFieldFileName])
-        _addUploading(fn, "statusForOrigin", "statusForOrigin")
+        _addUploading(fn, "statusForOrigin")
 
     if aFileRow[kFileFieldStatusForThumb] == defines.kFileStatusFromUploading:
         #小缩略图上传信息
         fn = unit.getFileThumbFullFileName(aFileRow[kFileFieldRealCatalogId], aFileRow[kFileFieldId], 0)
-        _addUploading(fn, "statusForThumb", "uploadingThumbSize")
+        _addUploading(fn, "uploadingThumbSize")
 
     if aFileRow[kFileFieldStatusForScreen] == defines.kFileStatusFromUploading:
         #大缩略图上传信息
         fn = unit.getFileThumbFullFileName(aFileRow[kFileFieldRealCatalogId], aFileRow[kFileFieldId], 1)
-        _addUploading(fn, "statusForScreen", "uploadingScreenSize")
+        _addUploading(fn, "uploadingScreenSize")
 
     unit.filterNullValue(fileInfo)
     return fileInfo
@@ -706,9 +721,11 @@ def buildCatalogIdsByFileRows(aFileRows):
 
 if __name__ == "__main__":
     print("begin test")
-    db = DataManager()
-    rows = db.getFileByUploading(1)
-    print(buildFileInfoList(rows, db))
+
+    # db = DataManager()
+    # db.deleteFiles("4, 5", "1, 2")
+    # rows = db.getFileByUploading(1)
+    # print(buildFileInfoList(rows, db))
     # print(db.buildCatalogPathInfo("1, 3,6"))
     # print(db.getFileByUploading(1))
     # print(db.getFiles("1, 2", "1,2", 0, 10, None, 0))

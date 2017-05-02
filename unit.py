@@ -9,8 +9,9 @@
 __author__="Terry<jxd524@163.com>"
 
 import os, subprocess, json
-import datetime
+import datetime, time
 import hashlib
+import base64
 import defines, configs
 
 def _getOrientationFromFFprobeStream(aStream):
@@ -284,9 +285,10 @@ def checkParamForIntList(aParam):
     return aParam if len(intList) > 0 else None
 
 
-def checkParamForDatetime(aParam):
+def checkParamForTimestamp(aParam):
     "检查是否可转成Datetime对象"
-    return datetime.datetime.fromtimestamp(float(aParam))
+    dt = datetime.datetime.fromtimestamp(float(aParam))
+    return dt.timestamp()
 
 
 def makeUserCreateCatalogPath(aParentPath, aName):
@@ -354,12 +356,47 @@ def buildOriginFileName(aCatalogPath, aDisplayName):
         except Exception as e:
             pass
 
-if __name__ == "__main__":
-    pass
-    s = buildOriginFileName("/Users/terry/work/terry/iSyncServer", "add")
-    print(s)
 
-    # aFileName = "/Users/terry/temp/myTest/IMG_1953.JPG"
+def SHA1FileWithName(aFileName, aMaxBlockSize = 1024 * 64):
+    "文件SHA1值"
+    print("SHA1:", aFileName)
+    with open(aFileName, 'rb') as f:
+        sha1 = hashlib.sha1()
+        while True:
+            data = f.read(aMaxBlockSize)
+            if not data:
+                break
+            sha1.update(data)
+    return sha1.hexdigest()
+
+def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
+    "文件MD5值"
+    print("MD5:", aFileName)
+    with open(aFileName, 'rb') as f:
+        md5 = hashlib.md5()
+        while True:
+            data = f.read(aMaxBlockSize)
+            if not data:
+                break
+            md5.update(data)
+    return md5.hexdigest()
+
+
+if __name__ == "__main__":
+    print("begin")
+    aFileName = "/Users/terry/temp/myTest/a.dmg"
+    print(time.time())
+    print(SHA1FileWithName(aFileName))
+    print(time.time())
+    print(MD5FileWithName(aFileName))
+    print(time.time())
+    # f = open(aFileName, "a+b")
+    # f.truncate(200)
+    # f.seek(0, os.SEEK_END)
+    # f.write(str.encode("__this is make by terry___", "utf-8"))
+    # f.close()
+
+
     # fStat = os.stat(aFileName)
     # nFileSize = fStat.st_size
 

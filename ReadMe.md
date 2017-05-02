@@ -526,18 +526,46 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 
 
 <span id="uploaodFile">
+
 ### 上传文件: uploadFile.icc
 
+若 multidata 的 filename 不在以下定义中,则直接报错
+
+| 请求方法 | POST |
+| -------- | ----- |
+
+|以下参数要与URL一起生成,如: uploadFile.icc?id=1&obp=82331&tbp=0&sbp=100&cm=sha1 |
+|--- |
+
+| 请求参数 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| id | int | 文件ID |
+| obp | int | 可选,默认为0;origin begin position, 此次上传的原始文件的开始位置,对应multidata中filename为"origin" |
+| tbp | int | 可选,默认为0;小缩略图开始位置,对应"thumb" |
+| sbp | int | 可选,默认为0;大缩略图开始位置, 对应"screen" |
+| cm | string | 可选,默认为None, 返回上传文件的检验值,暂时支持:sha1, md5.若不是指定值,则不计算检验值,由客户端负责自行检验
+| 以下参数为multipart/form-data, 具体作用请自行查阅 |
+| origin | bin | filename为origin的部分代表原始文件|
+| thumb | bin | 小缩略图 |
+| screen | bin | 大缩略图 |
+|||
+| 响应Data | [Response](#uploadResponse) |
+
+<span id="uploadResponse">**uploadResponse**</span>
+
+>{
+    "fileInfo": {[fileInfo](#fileInfo)},
+    "check": {"origin": "sha1或md5或空值", "thumb": "xxx", "screen": "xxx"}
+}
 
 
-## 获取上传文件当前进度
-| 请求方法 | GET |
+### 删除指定文件: deleteFiles.icc
+
+| 请求方法 | POST |
 | -------- | --- |
 |||
 | 请求参数 | 类型 | 说明 |
-| fid | int | 文件ID,-1表示所有上传中的文件 |
+| ids | string | 要删除文件的id,可多个 |
 |||
-| 响应Data | **CatalogInfo** |
-
-
+| 响应Data | 无 |
 

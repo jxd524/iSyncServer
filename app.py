@@ -7,14 +7,14 @@ __author__ = "Terry<jxd524@163.com>"
 flask 框架处理
 """
 
-import os, datetime
+import os, time
 import werkzeug
 from werkzeug import datastructures, secure_filename
 from flask import Flask, request, session, g, abort
 import json
 import hashlib
 
-import dataManager, responseHelp, defines, unit, cache, configs
+import dataManager, responseHelp, defines, unit, cache, configs, log
 from dataManager import DataManager
 from cache import LoginInfo
 from responseHelp import checkApiParam
@@ -236,12 +236,12 @@ def appGetCatalogs():
 @app.route("/createCatalog.icc", methods=["POST"])
 def appCreateCatalog():
     "创建目录"
-    curDateTime = datetime.datetime.now()
+    curTimestamp = time.time()
     result = checkApiParam(True, [
         {"name": "parentId", "checkfunc": unit.checkParamForInt},
         {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None},
-        {"name": "createTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
-        {"name": "lastModifyTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "createTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
+        {"name": "lastModifyTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
         {"name": "memo", "default": None},
         {"name": "helpInt", "default": None},
         {"name": "helpText", "default": None}])
@@ -436,7 +436,7 @@ def appGetShareFile():
 def appUploadFileInfo():
     "上传文件信息"
     funcCheckStatus = lambda v: int(v) if int(v) in (defines.kFileStatusFromLocal, defines.kFileStatusFromUploading) else defines.kFileStatusFromLocal
-    curDateTime = datetime.datetime.now()
+    curTimestamp = time.time()
     result = checkApiParam(True, (
         {"name": "cid", "checkfunc": unit.checkParamForInt},
         {"name": "name", "checkfunc": lambda v: v if len(v) > 0 and len(v) <= 100 else None},
@@ -444,9 +444,9 @@ def appUploadFileInfo():
         {"name": "type", "checkfunc": unit.checkParamForFileType},
         {"name": "statusForThumb", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
         {"name": "statusForScreen", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
-        {"name": "createTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
-        {"name": "importTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
-        {"name": "lastModifyTime", "checkfunc": unit.checkParamForDatetime, "default": curDateTime},
+        {"name": "createTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
+        {"name": "importTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
+        {"name": "lastModifyTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
         {"name": "duration", "checkfunc": lambda v: float(v), "default": None},
         {"name": "width", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "height", "checkfunc": unit.checkParamForInt, "default": None},
@@ -473,7 +473,8 @@ def appUploadFileInfo():
     param["statusForOrigin"] = defines.kFileStatusFromUploading
     nNewFileId = db.addFile(catalogRow[dataManager.kCatalogFieldRootId], nCatalogId, param)
     fileRow = db.getFileByIdAndRootIds(nNewFileId, None)
-    return responseHelp.buildSuccessResponseData(dataManager.buildFileInfo(fileRow))
+    funcForIdRelatePath = lambda : db.getCatalogIdRelatePathInfo(nCatalogId)
+    return responseHelp.buildSuccessResponseData(dataManager.buildFileInfo(fileRow, funcForIdRelatePath))
 
 
 @app.route("/uploadingInfo.icc", methods=["GET"])
@@ -494,42 +495,129 @@ def appUploadingInfo():
 
 @app.route("/uploadFile.icc", methods=["POST"])
 def appUploadFile():
-    print('new request')
+    "上传文件"
     print(request.args)
-    return "xxxxx"
+    result = responseHelp.checkApiParamWithRequestValues(True, (
+        {"name": "id", "checkfunc": unit.checkParamForInt},
+        {"name": "obp", "checkfunc": unit.checkParamForInt, "default": 0},
+        {"name": "tbp", "checkfunc": unit.checkParamForInt, "default": 0},
+        {"name": "sbp", "checkfunc": unit.checkParamForInt, "default": 0},
+        {"name": "cm", "default": None}
+        ), request.args)
 
-    def custom_stream_factory(total_content_length, content_type, filename, content_length=None):
-        print("total_content_length: ", total_content_length);
-        print("filename: ", filename);
-        print("content_type: ", content_type);
-        tmpfile = open("/Users/terry/Downloads/myTest.xd", "a+b");
-        print("start receiving file ... filename => " + str(tmpfile.name))
-        return tmpfile
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nFileId = param["id"]
+
+    db = _getDbManager()
+    fileRow = db.getFileByIdAndRootIds(nFileId, loginInfo.rootIdsString)
+    if not fileRow:
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+
+    upFileInfos = {}
+    orgFullFileName = None
+    upFileNames = {}
+    def _myUploadFileStreamFactory(aTotalContentLength, aContentType, aFileName, aContentLength):
+        "生成文件进入写入操作"
+        strFullFileName = None
+        nBeginPos = 0
+        strDbFiledName = None
+        if aFileName == "origin":
+            #处理R原始文件
+            catalogRow = db.getCatalogByIdAndRootIds(fileRow[dataManager.kFileFieldRealCatalogId], 
+                    loginInfo.rootIdsString)
+            if catalogRow:
+                strFullFileName = os.path.join(catalogRow[dataManager.kCatalogFieldPath], 
+                        fileRow[dataManager.kFileFieldFileName])
+                nBeginPos = param["obp"]
+                strDbFiledName = "statusForOrigin"
+                nonlocal orgFullFileName
+                orgFullFileName = strFullFileName
+        elif aFileName == "thumb":
+            #小缩略图
+            strFullFileName = unit.getFileThumbFullFileName(fileRow[dataManager.kFileFieldRealCatalogId], nFileId, 0)
+            nBeginPos = param["tbp"]
+            strDbFiledName = "statusForThumb"
+        elif aFileName == "screen":
+            #大缩略图
+            strFullFileName = unit.getFileThumbFullFileName(fileRow[dataManager.kFileFieldRealCatalogId], nFileId, 0)
+            nBeginPos = param["sbp"]
+            strDbFiledName = "statusForScreen"
+
+        if not strFullFileName:
+            raise RuntimeError("filename is error")
+
+        # 判断文件的大小,与传入参数进行对比,若传入文件大小过大,则直接报错.否则根据传入参数进行写操作
+        nCurFileSize = os.stat(strFullFileName).st_size if os.path.isfile(strFullFileName) else 0
+        if nBeginPos > nCurFileSize:
+            raise RuntimeError("begin position is error!")
+
+        upFileInfos[strDbFiledName] = defines.kFileStatusFromUploaded
+        upFileNames[aFileName] = strFullFileName
+
+        print("will open file: ", strFullFileName, "; beginPos: ", nBeginPos)
+        f = open(strFullFileName, "a+b")
+        f.truncate(nBeginPos)
+        f.seek(0, os.SEEK_END)
+        return f
+
+    # 开始接收文件内容
+    try:
+        stream,form,files = werkzeug.formparser.parse_form_data(request.environ, 
+                stream_factory = _myUploadFileStreamFactory,
+                silent = False) 
+    except Exception as e:
+        for key in upFileInfos.keys():
+            upFileInfos[key] = defines.kFileStatusFromUploading
+        db.updateFile(nFileId, upFileInfos, loginInfo.rootIdsString)
+        log.logObject().error(e)
+        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+
+    # 更新数据库
+    if orgFullFileName:
+        upFileInfos["size"] = os.stat(orgFullFileName).st_size
+    db.updateFile(nFileId, upFileInfos, loginInfo.rootIdsString)
 
 
-    stream,form,files = werkzeug.formparser.parse_form_data(request.environ, stream_factory=custom_stream_factory)
-    total_size = 0
+    # 生成返回数据
+    fileRow = db.getFileByIdAndRootIds(nFileId, loginInfo.rootIdsString)
+    funcForIdRelatePath = lambda : db.getCatalogIdRelatePathInfo(fileRow[dataManager.kFileFieldRealCatalogId])
+    fileInfo = dataManager.buildFileInfo(fileRow, funcForIdRelatePath)
+    result = {"fileInfo": fileInfo}
 
-    print(stream);
-    print(form);
-    print(files);
-    print(2);
-    for fil in files.values():
-        print(" ".join(["saved form name", fil.name, "submitted as", fil.filename, "to temporary file", fil.stream.name]))
-        total_size += os.path.getsize(fil.stream.name)
-    print(total_size);
-    return "Hello World!"
+    #写入检验值
+    strCm = param["cm"]
+    if strCm:
+        strCm = strCm.lower()
+        bSha1 = strCm == "sha1"
+        bMd5 = not bSha1 and strCm == "md5"
+        if bSha1 or bMd5:
+            check = {}
+            for key, filename in upFileNames.items():
+                check[key] = unit.SHA1FileWithName(filename) if bSha1 else unit.MD5FileWithName(filename)
+            result["check"] = check
+
+    return responseHelp.buildSuccessResponseData(result)
 
 
-    print(request.files);
-    print(request.form);
-    # return "finished";
+@app.route("/deleteFiles.icc", methods=["POST"])
+def appDeleteFiles():
+    "获取指定目录下的文件"
+    result = checkApiParam(True, ({"name": "ids", "checkfunc": unit.checkParamForIntList},))
 
-    for fileName, fileObject in request.files.items():
-        strFileName = secure_filename(fileName);
-        strFullFileName = os.path.join("/Users/terry/Downloads",strFileName);
-        fileObject.save(strFullFileName);
-    return "finished"
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+
+    # 查询数据
+    db = _getDbManager()
+    db.deleteFiles(param["ids"], loginInfo.rootIdsString)
+    return responseHelp.buildSuccessResponseData("OK")
 
 
 if __name__ == "__main__":

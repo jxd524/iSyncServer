@@ -168,7 +168,6 @@ def checkApiParamWithRequestValues(aNeedLogin, aParams, aRequestValues):
         result.append(loginInfo)
         params = {}
 
-        requestValue = request.get_json(True, True, False) if request.is_json else request.values
         # begin for
         for item in aParams:
             if isinstance(item, str):
@@ -182,7 +181,7 @@ def checkApiParamWithRequestValues(aNeedLogin, aParams, aRequestValues):
                 bHasCheckFunc = "checkfunc" in item.keys()
                 checkFunc = item["checkfunc"] if bHasCheckFunc else None
 
-            value = requestValue.get(key)
+            value = aRequestValues.get(key)
             if bHasCheckFunc:
                 try:
                     value = checkFunc(value)
@@ -207,7 +206,7 @@ def checkApiParamWithRequestValues(aNeedLogin, aParams, aRequestValues):
 
 def checkApiParam(aNeedLogin, aParams):
     requestValue = request.get_json(True, True, False) if request.is_json else request.values
-    checkApiParamWithRequestValues(aNeedLogin, aParam, requestValue)
+    return checkApiParamWithRequestValues(aNeedLogin, aParams, requestValue)
 
 
 if __name__ == "__main__":
