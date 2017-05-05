@@ -251,6 +251,7 @@ def generateThumbailImage(aCatalogId, aFileId, aInputFile, aOrientation, aOrgWid
         print("error")
     return strOutFile if bOK else ""
 
+
 def filterNullValue(aDict):
     "过滤空值"
     removeKeys = []
@@ -259,6 +260,21 @@ def filterNullValue(aDict):
             removeKeys.append(key)
     for key in removeKeys:
         aDict.pop(key)
+
+
+def buildFormatString(aRows, aIndex, aSpace=",", aFormat="{}"):
+    "将二维数组中的指定列数据格式指定形式"
+    result = None
+    if aRows and len(aRows) > 0:
+        for item in aRows:
+            cid = item if isinstance(item, str) else item[aIndex]
+            s = aFormat.format(cid)
+            if result:
+                result += aSpace + s
+            else:
+                result = s
+    return result if result else ""
+
 
 
 def checkParamForInt(aParam):
@@ -324,8 +340,25 @@ def makeValue(aDict, aKey, aDefaultValue):
 
 
 def removePath(aPath):
+    "删除指定路径或文件,可为字符串或数组"
+    if isinstance(aPath, str):
+        strPath = "'{}'".format(aPath)
+    else:
+        strPath = buildFormatString(aPath, 0, aSpace = " ", aFormat = "'{}'")
+
+    strCmd = "rm -rf {}".format(strPath)
     import subprocess
-    subprocess.Popen("rm -rf '{}'".format(aPath), shell=True)
+    subprocess.Popen(strCmd, shell=True)
+
+
+def moveFile(aFileName, aPath):
+    "将指定文件移动到指定目录下, 指定目录下不存在对应文件才能成功"
+    import shutil
+    try:
+        shutil.move(aFileName, aPath)
+        return True
+    except Exception as e:
+        return False
 
 
 def getFileThumbFullFileName(aCatalogId, aFileId, aLevel):
@@ -384,12 +417,12 @@ def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
 
 if __name__ == "__main__":
     print("begin")
-    aFileName = "/Users/terry/temp/myTest/a.dmg"
-    print(time.time())
-    print(SHA1FileWithName(aFileName))
-    print(time.time())
-    print(MD5FileWithName(aFileName))
-    print(time.time())
+    aPath = ("abc", "kkk", "ee")
+    x = moveFile("/Users/terry/Downloads/invite_bg@2x.png", "/Users/terry/temp/ipaImage")
+    print(x)
+    # removePath(aPath)
+    # print(buildFormatString([(1,2,3), (4, 5, 6), (7, 8,9)], 1, aSpace="|", aFormat="({})"))
+    # aFileName = "/Users/terry/temp/myTest/a.dmg"
     # f = open(aFileName, "a+b")
     # f.truncate(200)
     # f.seek(0, os.SEEK_END)

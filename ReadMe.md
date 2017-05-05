@@ -194,7 +194,7 @@ kFileTypeFile       = 1 << 4
     "name": "displayName",
     "createTime": 123123123.00,
     "lastLoginDate": 1480665083.080785,
-    "rootids": "1,5,10"
+    "rootIds": "1,5,10",
     "helpInt": 20,
     "helpText": "only for client"
 }
@@ -332,11 +332,11 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 | 请求参数 | 类型 | 说明 |
 | parentId | int | 父类Id |
 | name | string | 目录名称, 长度限制( 1 <= len < 100) |
-| createTime | [datetime](#datetime) | 创建时间,可选 |
-| lastModifyTime | [datetime](datetime) | 最后修改时间,可选 |
-| memo | string | 备注,可选 |
-| helpInt | int | 辅助信息,可选 |
-| helpText | string | 辅助信息,可选 |
+| createTime | [datetime](#datetime) | 可选, 创建时间 |
+| lastModifyTime | [datetime](datetime) | 可选, 最后修改时间 |
+| memo | string | 可选, 备注 |
+| helpInt | int | 可选, 辅助信息 |
+| helpText | string | 可选, 辅助信息 |
 |||
 | 响应Data | **[CatalogInfo](#catalogInfo)** |
 
@@ -347,7 +347,7 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 | -------- | --- |
 |||
 | 请求参数 | 类型 | 说明 |
-| ids | string | 要删除的目录Id,以","分隔.不支持删除根目录.此操作会直接将指定目录下的所有文件,子目录都进行删除 |
+| ids | string | 要删除的目录Id,以","分隔.不支持删除根目录.<br>此操作会直接将指定目录下的所有文件,子目录都进行删除 |
 |||
 | 响应Data | "提示信息" |
 
@@ -359,11 +359,11 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 |||
 | 请求参数 | 类型 | 说明 |
 | id | int | 将被更新目录 |
-| parentId | int | 目录移动到指定目录,此操作只修改数据库,不修改实际文件位置 |
-| name | string | 目录名称, 长度限制( 1 <= len < 100)(可选) |
-| memo | string | 备注,可选 |
-| helpInt | int | 辅助信息,可选 |
-| helpText | string | 辅助信息,可选 |
+| parentId | int | 可选, 目录移动到指定目录,此操作只修改数据库,不修改实际文件位置 |
+| name | string | 可选, 目录名称, 长度限制( 1 <= len < 100) |
+| memo | string | 可选, 备注 |
+| helpInt | int | 可选, 辅助信息 |
+| helpText | string | 可选, 辅助信息 |
 |||
 | 响应Data | "提示信息" |
 
@@ -568,4 +568,31 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 | ids | string | 要删除文件的id,可多个 |
 |||
 | 响应Data | 无 |
+
+
+### 更新文件信息: updateFile.icc
+
+| 请求方法 | POST |
+| -------- | --- |
+|||
+| 请求参数 | 类型 | 说明 |
+| id | int | 将被更新文件ID |
+| catalogId | int | 可选, 文件将被移动到指定目录,此操作只修改数据库,不修改实际文件位置 |
+| name | string | 可选, 文件显示名称 |
+| size | int | 可选, 文件大小 |
+| type | [fileType](#fileType) | 可选, 文件类型 |
+| [statusForThumb](#fileStatus) | int | 可选,缩略图生成方式,<br>默认值是kFileStatusFromLocal,表示由服务器从本地原文件自动生成<br>可选值为 kFileStatusFromUploading,表示后续由客户端[上传](#uploadFile) |
+| [statusForScreen](#fileStatus) | int | 可选, 与 statusForThumb 含义相同 |
+| createTime | [datetime](#datetime) | 可选, 创建时间 |
+| importTime | [datetime](#datetime) | 可选, 导入时间 |
+| lastModifyTime | [datetime](#datetime) | 可选, 最后修改时间 |
+| duration | float | 可选,持续时间,视频与GIF有效 |
+| width | int | 可选,宽度 |
+| height | int |  可选,高度 |
+| [orientation](#orientation) | int |  可选,媒体方向,若需要服务端生成缩略图,此值必须为有效值 |
+| memo | string |  可选,备注,最长 1024 |
+| helpInt | int | 可选,辅助信息 |
+| helpText | string | 可选, 辅助信息 |
+|||
+| 响应Data | "提示信息" |
 

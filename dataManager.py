@@ -330,13 +330,13 @@ class DataManager(JxdSqlDataBasic):
                     aCatalogInfo["rootId"] = nNewRootId
 
         #更新Catalog表
-        afv = None 
-        if aCatalogInfo.get("lastModifyTime") == None:
+        afv = None
+        if not aCatalogInfo.get("lastModifyTime"):
             afv = {"lastModifyTime": time.time()}
-        bOK = self.update(_kCatalogTableName, 
-                {"id": aId,
-                    formatInField("rootId", aLimitStrRootIds): None},
-                aCatalogInfo, afv)
+        bOK = self.update(_kCatalogTableName, {
+            "id": aId,
+            formatInField("rootId", aLimitStrRootIds): None},
+            aCatalogInfo, afv)
 
         #更新File表
         if bOK and bUpdateFileTable:
@@ -366,41 +366,94 @@ class DataManager(JxdSqlDataBasic):
         "删除指定目录"
         if aIds == None or aLimitStrRootIds == None:
             return
-        rows = self.select(_kCatalogTableName, 
-                {formatInField("rootId", aLimitStrRootIds): None,
-                    formatInField("id", aIds): None,
-                    (lambda :"parentId != -1"): None},
-                aOneRecord=False)
-
-        self._loopDeleteCatalogRecords(rows)
-        for item in rows:
-            path = item[kCatalogFieldPath]
-            unit.removePath(path)
-
-
-    def _loopDeleteCatalogRecords(self, aParentRows):
-        "递归删除指定目录的子目录与相关文件的数据库记录"
-        if not aParentRows or len(aParentRows) == 0:
+        #递归查询所有将被删除的目录信息
+        sql = """
+            with recursive
+                cids(x) AS(
+                    select id from {table} 
+                        where id in ({ids}) and rootId in ({limitIds}) and parentId != -1
+                    union all
+                    select id from {table}, cids
+                        where {table}.parentid = cids.x
+                )
+            select * from {table} where {table}.id in cids
+            """.format(table=_kCatalogTableName, ids=aIds, limitIds=aLimitStrRootIds)
+        rows = self.fetch(sql, fetchone = False)
+        if not rows or len(rows) == 0:
             return
-        cids = ""
-        for item in aParentRows:
-            nid = item[kCatalogFieldId]
-            if len(cids) > 0:
-                cids += ",{}".format(nid)
-            else:
-                cids = "{}".format(nid)
 
-        # 删除文件
+        waitDeletePaths = []
+        for item in rows:
+            waitDeletePaths.append(item[kCatalogFieldPath])
+
+        #组合所有目录id
+        cids = unit.buildFormatString(rows, kCatalogFieldId)
+
+        #所有挂接到此目录下,但实际位置在其它目录的文件,删除之
+        self._queryWaitDeleteFiles(cids, waitDeletePaths)
+
+        #所有实际在此目录,但已经挂接到其它目录下的,移动文件并修改realCatalogId
+        self._moveFilesToNewPath(cids)
+
+        #删除记录
+        self.delete(_kCatalogTableName, {formatInField("id",cids): None})
         self.delete(_kFileTableName, {formatInField("catalogId", cids): None})
 
-        # 删除信息
-        self.delete(_kCatalogTableName, {formatInField("id",cids): None})
+        #删除文件
+        unit.removePath(waitDeletePaths)
 
-        # 删除子目录
-        rows = self.select(_kCatalogTableName, 
-                {formatInField("parentId", cids): None}, 
-                aOneRecord=False)
-        self._loopDeleteCatalogRecords(rows)
+
+    def _queryWaitDeleteFiles(self, aCids, aToList):
+        deleteFileRows = self.select(_kFileTableName, {
+            formatInField("catalogId", aCids): None,
+            (lambda : "realCatalogId not in ({})".format(aCids)): None}, aOneRecord = False)
+        if deleteFileRows and len(deleteFileRows) > 0:
+            delFilePathIds = unit.buildFormatString(deleteFileRows, kFileFieldRealCatalogId)
+            piInfos = self.getCatalogIdRelatePathInfo(delFilePathIds)
+            for item in deleteFileRows:
+                path = piInfos[item[kFileFieldRealCatalogId]]
+                name = item[kFileFieldFileName]
+                aToList.append(os.path.join(path, name))
+
+    def _moveFilesToNewPath(self, aCids):
+        moveFileRows = self.select(_kFileTableName, {
+            formatInField("realCatalogId", aCids): None,
+            (lambda : "catalogId not in ({})".format(aCids)): None}, aOneRecord = False)
+        if moveFileRows and len(moveFileRows) > 0:
+            srcIds = unit.buildFormatString(moveFileRows, kFileFieldRealCatalogId)
+            destIds = unit.buildFormatString(moveFileRows, kFileFieldCatalogId)
+            srcInfo = self.getCatalogIdRelatePathInfo(srcIds)
+            destInfo = self.getCatalogIdRelatePathInfo(destIds)
+            for item in moveFileRows:
+                newInfo = {"realCatalogId": item[kFileFieldCatalogId]}
+                newPath = destInfo[item[kFileFieldCatalogId]]
+                srcPath = srcInfo[item[kFileFieldRealCatalogId]]
+                srcName = item[kFileFieldFileName]
+                srcFile = os.path.join(srcPath, srcName)
+                if not unit.moveFile(srcFile, newPath):
+                    if not item[kFileFieldName]:
+                        newInfo["name"] = srcName
+
+                    i = 1
+                    newRenameFile = None
+                    while True:
+                        srcTempName = srcName
+                        ls = srcTempName.split(".")
+                        if ls and len(ls) > 1:
+                            ls[-2] = ls[-2] + "_{}".format(i)
+                            srcTempName = unit.buildFormatString(ls, 0, aSpace=".")
+                        else:
+                            srcTempName += "_{}".format(i)
+                        i += 1
+                        newRenameFile = os.path.join(newPath, srcTempName)
+                        if not os.path.exists(newRenameFile):
+                            if unit.moveFile(srcFile, newRenameFile):
+                                newInfo["filename"] = srcTempName
+                                break;
+                    #end while
+                #end if
+                self.update(_kFileTableName, {"id": item[kFileFieldId]}, newInfo)
+            #end for
 
 
 #public function - File
@@ -434,9 +487,11 @@ class DataManager(JxdSqlDataBasic):
             若存在aLimitStrRootIds和aFileInfo["catalogId"]有效时, 只修改数据信息,不会真正移动文件
         """
         if aLimitStrRootIds != None and aFileInfo.get("catalogId") != None:
-            #新位置是否有效
+            #新位置是否有效s
             nNewCatalogId = aFileInfo["catalogId"]
-            sql = """select a.rootId as newRootId, b.catalogId as curCatalogId, b.rootCatalogId 
+            sql = """select a.rootId        as newRootId, 
+                            b.catalogId     as curCatalogId, 
+                            b.rootCatalogId as curRootId
                 from {catalogTable} a, {fileTable} b 
                 where a.id = ? and a.rootId in ({limitIds}) 
                     and b.id = ? and b.rootCatalogid in ({limitIds})
@@ -447,9 +502,12 @@ class DataManager(JxdSqlDataBasic):
                 return False
 
             #是否要修改 catalogId
-            if nNewCatalogId != row[1] and row[0] != row[2]:
-                aFileInfo["rootCatalogId"] = row[0]
-            else:
+            nNewRootId = row[0]
+            nCurCatalogId = row[1]
+            nCurRootId = row[2]
+            if nNewRootId != nCurRootId:
+                aFileInfo["rootCatalogId"] = nNewRootId
+            if nNewCatalogId == nCurCatalogId:
                 aFileInfo.pop("catalogId")
 
         # 更新数据
@@ -477,7 +535,7 @@ class DataManager(JxdSqlDataBasic):
                     formatInField("rootCatalogId", aLimitStrRootIds): None}
         rows = self.select(_kFileTableName, where, aOneRecord = False)
 
-        cids = buildCatalogIdsByFileRows(rows)
+        cids = unit.buildFormatString(rows, kFileFieldRealCatalogId)
         irp = self.getCatalogIdRelatePathInfo(cids)
 
         for item in rows:
@@ -699,30 +757,23 @@ def buildFileInfoList(aFileRows, aDbObject):
         #嵌套函数实现一次查询,多次使用
         nonlocal irp
         if not irp:
-            cids = buildCatalogIdsByFileRows(aFileRows)
+            cids = unit.buildFormatString(aFileRows, kFileFieldRealCatalogId)
             irp = aDbObject.getCatalogIdRelatePathInfo(cids)
         return irp
+
     for item in aFileRows:
         fileInfo = buildFileInfo(item, _buildIdRelatePath)
         result.append(fileInfo)
     return result
 
 
-def buildCatalogIdsByFileRows(aFileRows):
-    result = ""
-    for item in aFileRows:
-        cid = item[kFileFieldRealCatalogId]
-        if len(result) == 0:
-            result = "{}".format(cid)
-        else:
-            result += ",{}".format(cid)
-    return result
-
-
 if __name__ == "__main__":
     print("begin test")
 
-    # db = DataManager()
+    db = DataManager()
+    # db.updateFile(61, {"catalogId": 2}, "1,2")
+    # db.updateCatalog(15, {"parentId": 1}, "1, 2")
+    # db.deleteCatalogs("5", "1,2")
     # db.deleteFiles("4, 5", "1, 2")
     # rows = db.getFileByUploading(1)
     # print(buildFileInfoList(rows, db))

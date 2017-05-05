@@ -21,7 +21,7 @@ kFileTypeAudio      = 1 << 3
 kFileTypeFile       = 1 << 4
 
 # 生成等比例缩略图时,最大长度(宽度或长度)
-kThumbnailImageMaxSize = 100
+kThumbnailImageMaxSize = 160
 
 # 生成等比例屏幕大小缩略图时,最大长度,只有视频文件需要
 kScreenThumbnailImageMaxSize = 800

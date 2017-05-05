@@ -138,7 +138,10 @@ def appLogin():
     key = LoginInfo.MakeObject(nUserId, rootIdList);
     session[defines.kSessionUserKey] = key;
 
-    return responseHelp.buildSuccessResponseData(dataManager.buildUserInfo(row))
+    #生成返回值
+    userInfo = dataManager.buildUserInfo(row)
+    userInfo["rootIds"] = LoginInfo.GetObject(key).rootIdsString
+    return responseHelp.buildSuccessResponseData(userInfo)
 
 
 @app.route("/logout.icc", methods=["POST"])
@@ -300,14 +303,14 @@ def appUpdateCatalog():
 
     loginInfo = result[kParamForLoginInfo]
     param = result[kParamForRequestParams]
-    nId = param["id"]
-    param.pop("id")
-    db = _getDbManager()
-    bOk = db.updateCatalog(nId, param, loginInfo.rootIdsString)
-    if bOk:
-        return responseHelp.buildSuccessResponseData("OK") 
-    else:
-        return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
+    nId = param.pop("id")
+
+    unit.filterNullValue(param)
+    bOK = False
+    if len(param) > 0:
+        db = _getDbManager()
+        bOk = db.updateCatalog(nId, param, loginInfo.rootIdsString)
+    return responseHelp.buildSuccessResponseData("OK") if bOk else responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
 
 
 @app.route("/files.icc", methods=["GET"])
@@ -618,6 +621,47 @@ def appDeleteFiles():
     db = _getDbManager()
     db.deleteFiles(param["ids"], loginInfo.rootIdsString)
     return responseHelp.buildSuccessResponseData("OK")
+
+
+@app.route("/updateFile.icc", methods=["POST"])
+def appUpdateFile():
+    "上传文件信息"
+    funcCheckStatus = lambda v: int(v) if int(v) in (defines.kFileStatusFromLocal, defines.kFileStatusFromUploading) else defines.kFileStatusFromLocal
+    result = checkApiParam(True, (
+        {"name": "id", "checkfunc": unit.checkParamForInt},
+        {"name": "catalogId", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "name", "checkfunc": lambda v: v if len(v) > 0 and len(v) <= 100 else None, "default": None},
+        {"name": "size", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "type", "checkfunc": unit.checkParamForFileType, "default": None},
+        {"name": "statusForThumb", "checkfunc": funcCheckStatus, "default": None},
+        {"name": "statusForScreen", "checkfunc": funcCheckStatus, "default": None},
+        {"name": "createTime", "checkfunc": unit.checkParamForTimestamp, "default": None},
+        {"name": "importTime", "checkfunc": unit.checkParamForTimestamp, "default": None},
+        {"name": "lastModifyTime", "checkfunc": unit.checkParamForTimestamp, "default": None},
+        {"name": "duration", "checkfunc": lambda v: float(v), "default": None},
+        {"name": "width", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "height", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "orientation", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "memo", "checkfunc": unit.checkParamForLess1024, "default": None},
+        {"name": "helpInt", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "helpText", "default": None},))
+
+    if not result[kParamForResult]:
+        return result[kParamForErrorResponse]
+
+    loginInfo = result[kParamForLoginInfo]
+    param = result[kParamForRequestParams]
+    nFileId = param.pop("id")
+    #目录信息
+    unit.filterNullValue(param)
+    bOK = False
+    if len(param) > 0:
+        db = _getDbManager()
+        bOK = db.updateFile(nFileId, param, loginInfo.rootIdsString)
+    return responseHelp.buildSuccessResponseData("OK") if bOK else responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
+
+
+
 
 
 if __name__ == "__main__":

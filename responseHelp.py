@@ -42,6 +42,7 @@ kCmdUserError_ResourceHasBeenRemove     = -10006
 kCmdUserError_CatalogIdInValid          = -10007
 kCmdUserError_BuildThumbFailed          = -10008
 kCmdUserError_WaitUploading             = -10009
+kCmdUserError_NotModify                 = -10010
 
 
 kCmdErrorMessags = {
@@ -55,6 +56,7 @@ kCmdErrorMessags = {
         kCmdUserError_CatalogIdInValid: "无效的目录Id",
         kCmdUserError_BuildThumbFailed: "无法生成缩略图",
         kCmdUserError_WaitUploading: "等待上传",
+        kCmdUserError_NotModify: "数据没有被修改",
 
         kCmdServerError_NotSetRootPath: "服务端必须设置根目录",
         kCmdServerError_FormatData: "服务器对数据格式时出错",
