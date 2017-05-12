@@ -152,6 +152,7 @@ def appLogout():
     if user:
         LoginInfo.DeleteObject(key)
         session.clear();
+        print("logou id:", user.userId)
     return responseHelp.buildSuccessResponseData("");
 
 
@@ -371,9 +372,10 @@ def appGetThumb():
             strFileOut = unit.generateThumbailImage(nCatalogId, nId, strFile, nOrientation, nWidth, nHeight, nType, nLevel)
             if not strFileOut or not os.path.isfile(strFileOut):
                 #无法生成缩略图
+                print(strFileOut) 
                 nErrorCode = responseHelp.kCmdUserError_BuildThumbFailed
                 field = "statusForThumb" if nLevel == 0 else "statusForScreen"
-                _getDbManager().updateFile(nId, {field: defines.kFileStatusBuildError})
+                _getDbManager().updateFile(nId, {field: defines.kFileStatusBuildError}, None)
         else:
             nErrorCode = kCmdUserError_WaitUploading
     elif nStatus == defines.kFileStatusFromUploaded:
