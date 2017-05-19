@@ -389,6 +389,9 @@ class DataManager(JxdSqlDataBasic):
         #组合所有目录id
         cids = unit.buildFormatString(rows, kCatalogFieldId)
 
+        #删除所有挂接在目录下的所有文件的缩略图
+        self._clearAllBuildFiles(cids)
+
         #所有挂接到此目录下,但实际位置在其它目录的文件,删除之
         self._queryWaitDeleteFiles(cids, waitDeletePaths)
 
@@ -403,17 +406,19 @@ class DataManager(JxdSqlDataBasic):
         unit.removePath(waitDeletePaths)
 
 
+    def _clearAllBuildFiles(self, aCids):
+        rows = self.select(_kFileTableName, {
+            formatInField("catalogId", aCids): None}, aOneRecord = False)
+        if rows and len(rows) > 0:
+            self._defFilesRes(rows, 2)
+
+
     def _queryWaitDeleteFiles(self, aCids, aToList):
         deleteFileRows = self.select(_kFileTableName, {
             formatInField("catalogId", aCids): None,
             (lambda : "realCatalogId not in ({})".format(aCids)): None}, aOneRecord = False)
         if deleteFileRows and len(deleteFileRows) > 0:
-            delFilePathIds = unit.buildFormatString(deleteFileRows, kFileFieldRealCatalogId)
-            piInfos = self.getCatalogIdRelatePathInfo(delFilePathIds)
-            for item in deleteFileRows:
-                path = piInfos[item[kFileFieldRealCatalogId]]
-                name = item[kFileFieldFileName]
-                aToList.append(os.path.join(path, name))
+            self._defFilesRes(deleteFileRows, 1, aToList)
 
     def _moveFilesToNewPath(self, aCids):
         moveFileRows = self.select(_kFileTableName, {
@@ -534,15 +539,44 @@ class DataManager(JxdSqlDataBasic):
         where = {formatInField("id", aIds): None, 
                     formatInField("rootCatalogId", aLimitStrRootIds): None}
         rows = self.select(_kFileTableName, where, aOneRecord = False)
+        self._defFilesRes(rows)
+        self.delete(_kFileTableName, where)
 
-        cids = unit.buildFormatString(rows, kFileFieldRealCatalogId)
+    def _defFilesRes(self, aFileRows, aDeleteType=3, aOnlyToAddList=None):
+        """删除指定文件记录所对应的资源,
+        :aDeleteType: 1->只删除原文件
+                      2->只删除生成的文件
+                      3->删除所有
+        :aOnlyToAddList: 若指定,则只将要删除的数据添加到数组
+        """
+        cids = unit.buildFormatString(aFileRows, kFileFieldRealCatalogId)
         irp = self.getCatalogIdRelatePathInfo(cids)
 
-        for item in rows:
-            strFile = os.path.join(irp[item[kFileFieldRealCatalogId]], item[kFileFieldFileName])
-            unit.removePath(strFile)
+        removePaths = [];
+        for item in aFileRows:
+            nCatalogId = item[kFileFieldRealCatalogId]
+            nFileId = item[kFileFieldId]
+            #原文件
+            if aDeleteType & 1:
+                strFile = os.path.join(irp[nCatalogId], item[kFileFieldFileName])
+                if os.path.isfile(strFile):
+                    removePaths.append(strFile)
 
-        self.delete(_kFileTableName, where)
+            #缩略图
+            if aDeleteType & 2:
+                strFile = unit.getFileThumbFullFileName(nCatalogId, nFileId, 0)
+                if os.path.isfile(strFile):
+                    removePaths.append(strFile)
+                #大缩略图
+                strFile = unit.getFileThumbFullFileName(nCatalogId, nFileId, 1)
+                if os.path.isfile(strFile):
+                    removePaths.append(strFile)
+
+        if len(removePaths) > 0:
+            if aOnlyToAddList:
+                aOnlyToAddList.extend(removePaths)
+            else:
+                unit.removePath(removePaths)
 
 
     def getFileByUploading(self, aUploadUserId):
@@ -605,7 +639,7 @@ class DataManager(JxdSqlDataBasic):
         #查询内容
         strWhere += " limit {begin}, {count}".format(begin = nLimitBegin, count = nLimitCount)
         sql = "select * from {} where {}".format(_kFileTableName, strWhere)
-        print(sql)
+        # print(sql)
         fileInfos = self.fetch(sql, fetchone = False)
 
         #分页信息
@@ -769,12 +803,11 @@ def buildFileInfoList(aFileRows, aDbObject):
 
 if __name__ == "__main__":
     print("begin test")
-
-    db = DataManager()
-    # db.updateFile(61, {"catalogId": 2}, "1,2")
+    # db = DataManager()
+    # db.updateFile(24, {"catalogId": 51}, "1,2")
     # db.updateCatalog(15, {"parentId": 1}, "1, 2")
-    # db.deleteCatalogs("5", "1,2")
-    # db.deleteFiles("4, 5", "1, 2")
+    # db.deleteCatalogs("51", "1,2")
+    # db.deleteFiles("103, 104, 105, 106, 107", "1, 2")
     # rows = db.getFileByUploading(1)
     # print(buildFileInfoList(rows, db))
     # print(db.buildCatalogPathInfo("1, 3,6"))

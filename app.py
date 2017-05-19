@@ -95,7 +95,7 @@ def _getFileInfo(aOtherParams, aValideFileTypes):
 
 
 # api define
-@app.route("/", methods=["POST"])
+@app.route("/", methods=["POST", "GET"])
 def appHome():
     return("hello world");
 
@@ -668,3 +668,4 @@ def appUpdateFile():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", threaded=True, debug=True);
+    # app.run(host="172.168.80.132", threaded=True, debug=True);

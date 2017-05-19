@@ -331,6 +331,11 @@ def formatInField(aName, aValue):
     "格式SQL的in查询字段"
     return (lambda :"{} in ({})".format(aName, aValue)) if aValue != None else None
 
+def formatNotInField(aName, aValue):
+    "格式SQL的not in查询字段"
+    return (lambda :"{} not in ({})".format(aName, aValue)) if aValue != None else None
+
+
 
 def makeValue(aDict, aKey, aDefaultValue):
     "确保容器存在指定key,value"
