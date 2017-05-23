@@ -243,11 +243,13 @@ kFileTypeFile       = 1 << 4
 }
 ```
 
-status和uploading会根据当前的[fileType](#fileType)进行返回
-若为 kFileStatusFromLocal 或 kFileStatusFromUploaded 则不会返回相对应的字段
-只有当状态为 kFileStatusFromUploading 时, 才会返回 uploading 的数量
-比如: statusForThumb == kFileStatusFromUploading 时,
-则 uploadingThumbSize 表示已上传的字节数
+PS:
+**uploadingThumbSize**: 表示当前已经上传的小缩略图大小
+**uploadingScreenSize**: 大缩略图
+**uploadingOriginSize**: 原始文件
+以上三个参数,只有当文件还没有上传成功时才会返回.用于断点上传功能.
+客户端在上传完文件信息之后,在每次上传文件内容之前,都可以先获取已上传字节数后,
+再上传后续内容.参考Api: [uploadFileInfo](#uploadFileInfo), [uploadFile](#uploadFile)
 
 <span id="pageInfo">**PageInfo**</span>: 分页信息
 ```json
@@ -525,7 +527,7 @@ status和uploading会根据当前的[fileType](#fileType)进行返回
 | 响应Data | array of [fileInfo](#fileInfo) |
 
 
-<span id="uploaodFile">
+<span id="uploadFile">
 
 ### 上传文件: uploadFile.icc
 

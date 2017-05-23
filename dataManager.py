@@ -764,7 +764,7 @@ def buildFileInfo(aFileRow, aFuncForPaths):
         #原始文件上传信息
         cp = aFuncForPaths() if callable(aFuncForPaths) else aFuncForPaths
         fn = os.path.join(cp[aFileRow[kFileFieldRealCatalogId]], aFileRow[kFileFieldFileName])
-        _addUploading(fn, "statusForOrigin")
+        _addUploading(fn, "uploadingOriginSize")
 
     if aFileRow[kFileFieldStatusForThumb] == defines.kFileStatusFromUploading:
         #小缩略图上传信息
