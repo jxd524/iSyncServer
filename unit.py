@@ -99,8 +99,8 @@ def _getImageInfoByPIL(aInputFile):
     """
     try:
         from PIL import Image, GifImagePlugin
-        img = Image.open(aInputFile, "r") 
-        result = {"width": img.width, "height": img.height}
+        img = Image.open(aInputFile, "r")
+        result = {"width": img.width, "height": img.height, "ext": img.format}
         nOrientation = None
         if hasattr(img, "_getexif"):
             exif = img._getexif()
@@ -422,9 +422,7 @@ def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
 
 if __name__ == "__main__":
     print("begin")
-    aPath = ("abc", "kkk", "ee")
-    x = moveFile("/Users/terry/Downloads/invite_bg@2x.png", "/Users/terry/temp/ipaImage")
-    print(x)
+    
     # removePath(aPath)
     # print(buildFormatString([(1,2,3), (4, 5, 6), (7, 8,9)], 1, aSpace="|", aFormat="({})"))
     # aFileName = "/Users/terry/temp/myTest/a.dmg"

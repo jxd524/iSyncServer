@@ -100,6 +100,7 @@ kFileFieldRootCatalogId         = __incFieldWithInit() #所属根目录ID
 kFileFieldCatalogId             = __incFieldWithInit() #对应的路径ID,此值可被修改
 kFileFieldRealCatalogId         = __incFieldWithInit() #对应的路径ID,此值不被修改,指明实际的位置
 kFileFieldFileName              = __incFieldWithInit() #文件名称,不包括路径
+kFileFieldExt                   = __incFieldWithInit() #文件扩展名,不包括"."
 kFileFieldName                  = __incFieldWithInit() #显示名称,默认为空
 kFileFieldCreateTime            = __incFieldWithInit() #创建时间
 kFileFieldUploadTime            = __incFieldWithInit() #上传时间
@@ -126,6 +127,7 @@ def _FileCreateTableSQL():
                 catalogId integer,
                 realCatalogId integer,
                 fileName varchar(100) collate nocase,
+                ext varchar(10)  collate nocase,
                 name varchar(100) collate nocase,
                 createTime timestamp default(datetime('now', 'localtime')),
                 uploadTime timestamp,
@@ -591,6 +593,7 @@ class DataManager(JxdSqlDataBasic):
         values.append(aUploadUserId)
         strWhere = "uploadUserId = ? and ({})".format(self.FormatFieldValues(where, values, "or"))
         sql = "select * from {} where {}".format(_kFileTableName, strWhere)
+        print(sql)
         return self.fetch(sql, values, False)
 
 
@@ -742,6 +745,7 @@ def buildFileInfo(aFileRow, aFuncForPaths):
             "uploadUserId": aFileRow[kFileFieldUploadUserId],
             "catalogId": aFileRow[kFileFieldCatalogId],
             "name": strName,
+            "ext": aFileRow[kFileFieldExt],
             "createTime": aFileRow[kFileFieldCreateTime],
             "uploadTime": aFileRow[kFileFieldUploadTime],
             "importTime": aFileRow[kFileFieldImportTime],

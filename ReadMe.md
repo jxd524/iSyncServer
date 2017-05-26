@@ -224,6 +224,7 @@ kFileTypeFile       = 1 << 4
     "uploadUserId": 1,
     "catalogId": 1,
     "name": "display name",
+    "ext": "mp4",
     "createTime": 123123,
     "uploadTime": 3243423,
     "importTime": 98123,
@@ -500,6 +501,7 @@ PS:
 | name | string | 文件显示名称 |
 | size | int | 文件大小 |
 | type | [fileType](#fileType) | 文件类型 |
+| ext | string | 可选,文件扩展名 |
 | [statusForThumb](#fileStatus) | int | 可选,缩略图生成方式,<br>默认值是kFileStatusFromLocal,表示由服务器从本地原文件自动生成<br>可选值为 kFileStatusFromUploading,表示后续由客户端[上传](#uploadFile) |
 | [statusForScreen](#fileStatus) | int | 与 statusForThumb 含义相同 |
 | createTime | [datetime](#datetime) | 可选, 创建时间 |
@@ -583,6 +585,7 @@ PS:
 | name | string | 可选, 文件显示名称 |
 | size | int | 可选, 文件大小 |
 | type | [fileType](#fileType) | 可选, 文件类型 |
+| ext | string | 可选,文件扩展名 |
 | [statusForThumb](#fileStatus) | int | 可选,缩略图生成方式,<br>默认值是kFileStatusFromLocal,表示由服务器从本地原文件自动生成<br>可选值为 kFileStatusFromUploading,表示后续由客户端[上传](#uploadFile) |
 | [statusForScreen](#fileStatus) | int | 可选, 与 statusForThumb 含义相同 |
 | createTime | [datetime](#datetime) | 可选, 创建时间 |

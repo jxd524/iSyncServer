@@ -195,6 +195,12 @@ class ScanDisk(object):
         fileInfo["fileName"] = strName
         fileInfo["size"] = nFileSize
         fileInfo["createTime"] = nCreateTime
+        try:
+            if len(fileInfo["ext"]) <= 0:
+                fileInfo["ext"] = os.path.splitext(aFileName)[1][1:]
+        except Exception as e:
+            fileInfo["ext"] = os.path.splitext(aFileName)[1][1:]
+
         unit.makeValue(fileInfo, "type", defines.kFileTypeFile)
         print("     %s" % strName)
         self.dbManager.addFile(aRootId, aPathId, fileInfo)
@@ -272,6 +278,10 @@ def makeUsers(aDataManager, aUsers):
     return result
 
 if __name__ == "__main__":
+    print("准备扫描...")
     main()
+    # s = "/Users/terry/abc.gif"
+    # print( os.path.splitext(s)[1][1:] )
+    print("扫描结束")
 
 
