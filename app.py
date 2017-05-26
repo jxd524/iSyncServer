@@ -473,7 +473,7 @@ def appUploadFileInfo():
     if not catalogRow:
         return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param)
 
-    strFileName = unit.buildOriginFileName(catalogRow[dataManager.kCatalogFieldPath], param["name"])
+    strFileName = unit.buildOriginFileName(catalogRow[dataManager.kCatalogFieldPath], param["ext"])
     param["uploadUserId"] = loginInfo.userId
     param["fileName"] = strFileName
     param["statusForOrigin"] = defines.kFileStatusFromUploading

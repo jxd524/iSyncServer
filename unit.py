@@ -309,23 +309,20 @@ def checkParamForTimestamp(aParam):
 
 def makeUserCreateCatalogPath(aParentPath, aName):
     "用户创建目录时生成路径"
-    nRandom = 123
+    if aName:
+        from werkzeug.utils import secure_filename
+        aName = secure_filename(aName)
+    aName = aName if aName and len(aName) > 0 else ""
     while True:
-        nRandom += 8
-        strFileName = "{}{}{}".format(datetime.datetime.now(), nRandom, aName)
-        md5 = hashlib.md5()
-        md5.update(strFileName.encode("utf8"))
-        strFileName = md5.hexdigest()
-        strPath = os.path.join(aParentPath, strFileName)
+        nTime = ((int)(time.time() * 1000000)) % 10000000000
+        strName = "{}_{}_{}".format(aName, datetime.date.today(), nTime)
+        strPath = os.path.join(aParentPath, strName)
         if not os.path.isdir(strPath):
-            break
-    try:
-        os.makedirs(strPath)
-        return strPath
-    except Exception as e:
-        print(e)
-    return None
-
+            try:
+                os.makedirs(strPath)
+                return strPath
+            except Exception as e:
+                pass
 
 def formatInField(aName, aValue):
     "格式SQL的in查询字段"
@@ -379,21 +376,21 @@ def getFileThumbFullFileName(aCatalogId, aFileId, aLevel):
     return os.path.join(result, name)
 
 
-def buildOriginFileName(aCatalogPath, aDisplayName):
-    nRandom = 882
+def buildOriginFileName(aCatalogPath, aExt):
+    "在指定目录下生成文件名,并自动生成一个空文件用于占位"
+    if aExt:
+        from werkzeug.utils import secure_filename
+        aExt = secure_filename(aExt)
+    strExt = ("." + aExt) if aExt and len(aExt) > 0 else ""
     while True:
-        nRandom += 3
-        strFileName = "{}{}{}".format(datetime.datetime.now(), nRandom, aDisplayName)
-        md5 = hashlib.md5()
-        md5.update(strFileName.encode("utf8"))
-        strFileName = md5.hexdigest()
+        nTime = ((int)(time.time() * 1000000)) % 10000000000
+        strFileName = "{}_{}{}".format(datetime.date.today(), nTime, strExt)
         strFullFileName = os.path.join(aCatalogPath, strFileName)
         try:
             with open(strFullFileName, "x") as f:
                 return strFileName
         except Exception as e:
             pass
-
 
 def SHA1FileWithName(aFileName, aMaxBlockSize = 1024 * 64):
     "文件SHA1值"
@@ -422,7 +419,11 @@ def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
 
 if __name__ == "__main__":
     print("begin")
-    
+    # buildOriginFileName("/Users/terry/temp", "JPEG")
+    # buildOriginFileName("/Users/terry/temp", "MP4")
+    # buildOriginFileName("/Users/terry/temp", None)
+    makeUserCreateCatalogPath("/Users/terry/temp", "xxx")
+    print("finished")
     # removePath(aPath)
     # print(buildFormatString([(1,2,3), (4, 5, 6), (7, 8,9)], 1, aSpace="|", aFormat="({})"))
     # aFileName = "/Users/terry/temp/myTest/a.dmg"
