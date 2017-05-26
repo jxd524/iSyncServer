@@ -9,9 +9,11 @@ db manager
 __author__="Terry<jxd524@163.com>"
 
 import os, sys, time
+import shutil
 from jxdsqlite import JxdSqlDataBasic
 import defines, log, unit
 from unit import formatInField
+from unit import formatNotInField
 from unit import makeValue
 
 """
@@ -386,7 +388,12 @@ class DataManager(JxdSqlDataBasic):
 
         waitDeletePaths = []
         for item in rows:
-            waitDeletePaths.append(item[kCatalogFieldPath])
+            s = item[kCatalogFieldPath]
+            s = s.lower()
+            waitDeletePaths.append(s)
+
+        #移动目录下的所有挂接到别的目录的子目录到实际位置
+        self._copySubCatalogToRealPath(waitDeletePaths)
 
         #组合所有目录id
         cids = unit.buildFormatString(rows, kCatalogFieldId)
@@ -418,14 +425,14 @@ class DataManager(JxdSqlDataBasic):
     def _queryWaitDeleteFiles(self, aCids, aToList):
         deleteFileRows = self.select(_kFileTableName, {
             formatInField("catalogId", aCids): None,
-            (lambda : "realCatalogId not in ({})".format(aCids)): None}, aOneRecord = False)
+            formatNotInField("realCatalogId", aCids): None}, aOneRecord = False)
         if deleteFileRows and len(deleteFileRows) > 0:
             self._defFilesRes(deleteFileRows, 1, aToList)
 
     def _moveFilesToNewPath(self, aCids):
         moveFileRows = self.select(_kFileTableName, {
             formatInField("realCatalogId", aCids): None,
-            (lambda : "catalogId not in ({})".format(aCids)): None}, aOneRecord = False)
+            formatNotInField("catalogId", aCids): None}, aOneRecord = False)
         if moveFileRows and len(moveFileRows) > 0:
             srcIds = unit.buildFormatString(moveFileRows, kFileFieldRealCatalogId)
             destIds = unit.buildFormatString(moveFileRows, kFileFieldCatalogId)
@@ -461,6 +468,55 @@ class DataManager(JxdSqlDataBasic):
                 #end if
                 self.update(_kFileTableName, {"id": item[kFileFieldId]}, newInfo)
             #end for
+
+    def _copySubCatalogToRealPath(self, aPaths):
+        "将已挂靠在不需要删除的子目录下的所有文件,复制一份到指定目录"
+        for item in aPaths:
+            self._judgeToMove(item, aPaths)
+    def _judgeToMove(self, aParentPath, aMovePaths):
+        ls = os.listdir(aParentPath)
+        for item in ls:
+            strPath = os.path.join(aParentPath, item)
+            if os.path.isdir(strPath):
+                strPath = strPath.lower()
+                if strPath not in aMovePaths:
+                    # 需要移动
+                    self._copyToRealPath(strPath)
+                self._judgeToMove(strPath, aMovePaths)
+
+    def _copyToRealPath(self, aPath):
+        "指定路径,根据记录,移动所有文件到新的目录下,不包含其子目录"
+        row = self.getCatalogByPath(aPath)
+        if not row:
+            return
+        nId = row[kCatalogFieldId]
+        param = {}
+        strOldPath = row[kCatalogFieldPath]
+        strCurDirName = row[kCatalogFieldName]
+        if not strCurDirName:
+            strCurDirName = os.path.basename(strOldPath)
+            param["name"] = strCurDirName
+
+        parentRow = self.getCatalogById(row[kCatalogFieldParentId])
+        strParentPath = parentRow[kCatalogFieldPath]
+
+        strNewPath = os.path.join(strParentPath, strCurDirName)
+        i = 0
+        while os.path.isdir(strNewPath):
+            strName = "{}_{}".format(strCurDirName, i)
+            i += 1
+            strNewPath = os.path.join(strParentPath, strName)
+        os.makedirs(strNewPath)
+        param["path"] = strNewPath
+
+        lsFiles = os.listdir(strOldPath)
+        for item in lsFiles:
+            strFile = os.path.join(strOldPath, item)
+            if os.path.isfile(strFile):
+                unit.moveFile(strFile, strNewPath)
+
+        self.update(_kCatalogTableName, {"id": nId}, param)
+
 
 
 #public function - File
@@ -808,9 +864,9 @@ def buildFileInfoList(aFileRows, aDbObject):
 if __name__ == "__main__":
     print("begin test")
     # db = DataManager()
-    # db.updateFile(24, {"catalogId": 51}, "1,2")
-    # db.updateCatalog(15, {"parentId": 1}, "1, 2")
-    # db.deleteCatalogs("51", "1,2")
+    # db.updateFile(30, {"catalogId": 8}, "1,2")
+    # db.updateCatalog(9, {"parentId": 2}, "1, 2")
+    # db.deleteCatalogs("7", "1,2")
     # db.deleteFiles("103, 104, 105, 106, 107", "1, 2")
     # rows = db.getFileByUploading(1)
     # print(buildFileInfoList(rows, db))

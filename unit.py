@@ -324,6 +324,7 @@ def makeUserCreateCatalogPath(aParentPath, aName):
             except Exception as e:
                 pass
 
+
 def formatInField(aName, aValue):
     "格式SQL的in查询字段"
     return (lambda :"{} in ({})".format(aName, aValue)) if aValue != None else None
@@ -343,15 +344,27 @@ def makeValue(aDict, aKey, aDefaultValue):
 
 def removePath(aPath):
     "删除指定路径或文件,可为字符串或数组"
+    import subprocess
+    strCmd = "rm -rf {}"
     if isinstance(aPath, str):
         strPath = "'{}'".format(aPath)
+        subprocess.Popen(strCmd.format(strPath), shell=True)
     else:
-        strPath = buildFormatString(aPath, 0, aSpace = " ", aFormat = "'{}'")
-
-    strCmd = "rm -rf {}".format(strPath)
-    import subprocess
-    subprocess.Popen(strCmd, shell=True)
-
+        nCount = 0
+        strPath = None
+        for item in aPath:
+            strTemp = "'{}'".format(item)
+            if nCount == 0:
+                strPath = strTemp
+            else:
+                strPath = "{} {}".format(strPath, strTemp)
+            nCount += 1
+            if nCount == 5:
+                subprocess.Popen(strCmd.format(strPath), shell=True)
+                strPath = None
+                nCount = 0
+        if strPath:
+            subprocess.Popen(strCmd.format(strPath), shell=True)
 
 def moveFile(aFileName, aPath):
     "将指定文件移动到指定目录下, 指定目录下不存在对应文件才能成功"
@@ -422,9 +435,16 @@ if __name__ == "__main__":
     # buildOriginFileName("/Users/terry/temp", "JPEG")
     # buildOriginFileName("/Users/terry/temp", "MP4")
     # buildOriginFileName("/Users/terry/temp", None)
-    makeUserCreateCatalogPath("/Users/terry/temp", "xxx")
-    print("finished")
-    # removePath(aPath)
+    # makeUserCreateCatalogPath("/Users/terry/temp", "xxx")
+    aPath = ("/Users/terry/temp/DDLog/Extensions/DDLog.m",
+            "/Users/terry/temp/DDLog/Extensions/DDAbstractDatabaseLogger.h", 
+            "/Users/terry/temp/DDLog/Extensions/DDAbstractDatabaseLogger.m",
+            "/Users/terry/temp/DDLog/Extensions/DDASLLogger.h",
+            "/Users/terry/temp/DDLog/Extensions/DDASLLogger.m",
+            "/Users/terry/temp/DDLog/Extensions/DDAssertMacros.h",
+            "/Users/terry/temp/DDLog/Extensions/DDDispatchQueueLogFormatter.h",
+            "/Users/terry/temp/DDLog/Extensions/DDDispatchQueueLogFormatter.m")
+    removePath(aPath)
     # print(buildFormatString([(1,2,3), (4, 5, 6), (7, 8,9)], 1, aSpace="|", aFormat="({})"))
     # aFileName = "/Users/terry/temp/myTest/a.dmg"
     # f = open(aFileName, "a+b")
@@ -442,3 +462,4 @@ if __name__ == "__main__":
     # s = generateThumbailImage(1, 212, aFileName, info["orientation"], info["width"], info["height"], info["type"], 0)
     # s = generateThumbailImage(1, 21, "/Users/terry/temp/myTest/IMG_1953.JPG", 6, 2448, 3264, 1, 0)
     # print(s)
+    print("finished")
