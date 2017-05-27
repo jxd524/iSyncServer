@@ -191,6 +191,7 @@ kFileTypeFile       = 1 << 4
 <span id="userInfo">**UserInfo**</span>: 用户信息
 ```json
 {
+    "id": 12,
     "name": "displayName",
     "createTime": 123123123.00,
     "lastLoginDate": 1480665083.080785,

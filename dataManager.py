@@ -755,7 +755,8 @@ class DataManager(JxdSqlDataBasic):
 #help function - global
 def buildUserInfo(aUserRow):
     "根据用户表信息生成发送给客户端的userInfo"
-    userInfo = {"name": aUserRow[kUserFieldName],
+    userInfo = {"id": aUserRow[kUserFieldId],
+            "name": aUserRow[kUserFieldName],
             "createTime": aUserRow[kUserFieldCreateTime],
             "lastLoginDate": aUserRow[kUserFieldLastLoginDate],
             "lastModifyTime": aUserRow[kUserFieldLastModifyTime],
