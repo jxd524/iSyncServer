@@ -653,26 +653,29 @@ class DataManager(JxdSqlDataBasic):
         return self.fetch(sql, values, False)
 
 
-    def getFiles(self, aStrPathIds, aStrRootIds, aPageIndex, aMaxPerPage, aStrTypes, aSort):
-        """查找指定路径下的文件内容
+    def getFiles(self, aRootIds, aPids, aTypes, aUploadUserId, aSort, aPageIndex, aMaxPerPage):
+        """查找指定路径下的文件内容, 对应API: file.icc 
 
-        :aStrPathIds: 所属目录ID
-        :aStrRootIds: 根目录Id, 用于权限判断
-        :aPageIndex: 第几页
-        :aMaxPerPage: 每页最大数量
-        :aStrTypes: 类型,详细见ReadMe.md文件
+        :aRootIds: 根目录Id, 如: 1,2,3 
+        :aPids: 所属目录ID, 可能为空
+        :aTypes: 文件的类型
+        :aUploadUserId: 上传用户Id, None表示不限定
         :aSort: 排序的方式: 1->文件创建时间, 2->上传时间, 3->文件大小, 4->持续时间, 5->文件尺寸
                     >0表示升序, <0表示降序
-        :returns: datelist, pageInfo
+        :aPageIndex: 第几页
+        :aMaxPerPage: 每页最大数量
+        :returns: (datelist, pageInfo)
         """
         funcNotEqual = lambda v: lambda :"{} != {}".format(v, defines.kFileStatusFromUploading)
-        strStatus = "{},{}".format(defines.kFileStatusFromLocal, defines.kFileStatusFromUploaded)
-        where = {formatInField("catalogId", aStrPathIds): None,
-                formatInField("rootCatalogId", aStrRootIds): None,
-                formatInField("type", aStrTypes): None,
+        where = {formatInField("rootCatalogId", aRootIds): None,
                 funcNotEqual("statusForOrigin"): None,
                 funcNotEqual("statusForThumb"): None,
-                funcNotEqual("statusForScreen"): None}
+                funcNotEqual("statusForScreen"): None,
+                "uploadUserId": aUploadUserId}
+        if aPids and len(aPids) > 0:
+            where[formatInField("catalogId", aStrPathIds)] = None
+        if aTypes and len(aTypes) > 0:
+            where[formatInField("type", aTypes)] = None
         strWhere = self.FormatFieldValues(where, None, "and")
 
         if aSort != None and aSort != 0:

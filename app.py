@@ -319,22 +319,34 @@ def appGetFiles():
     "获取指定目录下的文件"
 
     result = checkApiParam(True, [
-        {"name": "pids", "checkfunc": unit.checkParamForIntList},
-        {"name": "pageIndex", "checkfunc": unit.checkParamForInt},
-        {"name": "maxPerPage", "checkfunc": lambda v: int(v) if int(v) > 0 and int(v) < 10000 else 100,
-            "default": 100},
+        {"name": "pageIndex", "checkfunc": lambda v: int(v) if int(v) >= 0 else None},
+        {"name": "maxPerPage", "checkfunc": lambda v: int(v) if int(v) >= 10 and int(v) <= 10000 else 100, "default": 100},
+        {"name": "rootIds", "checkfunc": unit.checkParamForIntList, "default": None},
+        {"name": "pids", "checkfunc": unit.checkParamForIntList, "default": None},
         {"name": "types", "checkfunc": unit.checkParamForIntList, "default": None},
+        {"name": "onlySelfUpload", "checkfunc": unit.checkParamForInt, "default": 0},
         {"name": "sort", "checkfunc": unit.checkParamForInt, "default": 0}])
 
-    if not result[kParamForResult]:
+    if not result[kParamForResult]: 
         return result[kParamForErrorResponse]
 
     loginInfo = result[kParamForLoginInfo]
     param = result[kParamForRequestParams]
 
+    # 根目录判断
+    rootIds = param["rootIds"]
+    if not rootIds or not unit.judgeIntStringsInList(rootIds, loginInfo.rootIdList):
+        rootIds = loginInfo.rootIdsString
+
+    # 上传者信息
+    uploadUserId = None
+    if param["onlySelfUpload"] != 0:
+        uploadUserId = loginInfo.userId
+
     # 查询数据
     db = _getDbManager();
-    fileRows, pageInfo = db.getFiles(param["pids"], loginInfo.rootIdsString, param["pageIndex"], param["maxPerPage"], param["types"], param["sort"])
+    fileRows, pageInfo = db.getFiles(rootIds, param["pids"], param["types"], 
+            uploadUserId,  param["sort"], param["pageIndex"], param["maxPerPage"])
 
     #生成数据
     ltData = dataManager.buildFileInfoList(fileRows, None)

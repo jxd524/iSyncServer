@@ -382,11 +382,13 @@ PS:
 | -------- | --- |
 |||
 | 请求参数 | 类型 | 说明 |
-| pids | string | 指定目录,如"1,2,3" |
-| pageIndex | int | 请求的页序号 |
-| maxPerPage | int | 可选,每页数量.默认为100|
-| types | string | 可选,数据类型,具体值参考[fileType](#fileType),如"1,8,16".默认为"所有类型" |
-| sort | int | 可选,排序方式, **>0**: 升序, **<0**:降序,**0**:不排序, 参考:[sort](#sort) |
+| pageIndex | int | 请求的页序号, 范围: >= 0 |
+| maxPerPage | int | 可选, 每页数量.默认为100, 范围: 10 <= maxPerPage <= 10000 |
+| rootIds | string | 可选,指定根目录,如"1,2",默认: 所有根目录下 |
+| pids | string | 可选,指定目录,如"1,2,3",默认:所有目录下 |
+| types | string | 可选,数据类型,具体值参考[fileType](#fileType),如"1,8,16".默认: 所有类型 |
+| onlySelfUpload | int | 可选,是否只是要自己上传的信息,默认为: 0(表示False, 其它值为True) |
+| sort | int | 可选,排序方式, **>0**: 升序, **<0**:降序,**0**:不排序, 默认: 不排序 参考:[sort](#sort) |
 |||
 | 响应Data | [fileResponse](#fileResponse) |
 

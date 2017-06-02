@@ -307,6 +307,18 @@ def checkParamForTimestamp(aParam):
     return dt.timestamp()
 
 
+def judgeIntStringsInList(aIntStrings, aList):
+    "判断类型 1,2,5 之类的字符串是否都存在于AList中"
+    intList = list(map(int, aIntStrings.split(",")))
+    if len(intList) > 0:
+        for item in intList:
+            if item not in aList:
+                return False
+        return True
+    else:
+        return False
+
+
 def makeUserCreateCatalogPath(aParentPath, aName):
     "用户创建目录时生成路径"
     if aName:
@@ -432,34 +444,5 @@ def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
 
 if __name__ == "__main__":
     print("begin")
-    # buildOriginFileName("/Users/terry/temp", "JPEG")
-    # buildOriginFileName("/Users/terry/temp", "MP4")
-    # buildOriginFileName("/Users/terry/temp", None)
-    # makeUserCreateCatalogPath("/Users/terry/temp", "xxx")
-    aPath = ("/Users/terry/temp/DDLog/Extensions/DDLog.m",
-            "/Users/terry/temp/DDLog/Extensions/DDAbstractDatabaseLogger.h", 
-            "/Users/terry/temp/DDLog/Extensions/DDAbstractDatabaseLogger.m",
-            "/Users/terry/temp/DDLog/Extensions/DDASLLogger.h",
-            "/Users/terry/temp/DDLog/Extensions/DDASLLogger.m",
-            "/Users/terry/temp/DDLog/Extensions/DDAssertMacros.h",
-            "/Users/terry/temp/DDLog/Extensions/DDDispatchQueueLogFormatter.h",
-            "/Users/terry/temp/DDLog/Extensions/DDDispatchQueueLogFormatter.m")
-    removePath(aPath)
-    # print(buildFormatString([(1,2,3), (4, 5, 6), (7, 8,9)], 1, aSpace="|", aFormat="({})"))
-    # aFileName = "/Users/terry/temp/myTest/a.dmg"
-    # f = open(aFileName, "a+b")
-    # f.truncate(200)
-    # f.seek(0, os.SEEK_END)
-    # f.write(str.encode("__this is make by terry___", "utf-8"))
-    # f.close()
-
-
-    # fStat = os.stat(aFileName)
-    # nFileSize = fStat.st_size
-
-    # info = getMediaFileInfo(aFileName, nFileSize)
-    # print(info)
-    # s = generateThumbailImage(1, 212, aFileName, info["orientation"], info["width"], info["height"], info["type"], 0)
-    # s = generateThumbailImage(1, 21, "/Users/terry/temp/myTest/IMG_1953.JPG", 6, 2448, 3264, 1, 0)
-    # print(s)
+    print( judgeIntStringsInList("1, 2", [1, 3]))
     print("finished")
