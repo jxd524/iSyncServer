@@ -334,7 +334,7 @@ PS:
 | -------- | --- |
 |||
 | 请求参数 | 类型 | 说明 |
-| parentId | int | 父类Id |
+| parentId | int | 父类Id,此ID必须存在 |
 | name | string | 目录名称, 长度限制( 1 <= len < 100) |
 | createTime | [datetime](#datetime) | 可选, 创建时间 |
 | lastModifyTime | [datetime](datetime) | 可选, 最后修改时间 |

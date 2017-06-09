@@ -673,7 +673,7 @@ class DataManager(JxdSqlDataBasic):
                 funcNotEqual("statusForScreen"): None,
                 "uploadUserId": aUploadUserId}
         if aPids and len(aPids) > 0:
-            where[formatInField("catalogId", aStrPathIds)] = None
+            where[formatInField("catalogId", aPids)] = None
         if aTypes and len(aTypes) > 0:
             where[formatInField("type", aTypes)] = None
         strWhere = self.FormatFieldValues(where, None, "and")

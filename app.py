@@ -444,7 +444,7 @@ def appGetShareFile():
 
     param = result[kParamForRequestParams]
     strFileName = cache.getAppFileCache().get(param["shareKey"])
-    print(strFileName)
+    # print(strFileName)
     return responseHelp.sendFile(strFileName) if strFileName else \
             responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_Param);
 
