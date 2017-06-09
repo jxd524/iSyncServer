@@ -444,7 +444,12 @@ PS:
 | 3 | 客户端上传完成 |
 
 
-### 请求指定的文件: downFile.icc
+### 请求指定的文件: downFile.icc< ext >
+
+** < ext > **: 表示扩展名,这是为了iOS在线播放而做的修改.它不参与计算,只是一个URL的表现形式
+如下面两次方式都是可行的:
+downFile.icc?id=12
+downFile.icc.mp4?id=12
 
 | 请求方法 | GET |
 | -------- | --- |
@@ -475,10 +480,15 @@ PS:
 ```
 
 
-### 获取用户分享的文件: shareFile.icc
+### 获取用户分享的文件: shareFile.icc< ext >
 
 此接口**不需要**用户已经**登录**,只要共享标志已经缓存在服务器就可以下载
 支持Http的单Range协议
+
+** < ext > **: 表示扩展名,这是为了iOS在线播放而做的修改.它不参与计算,只是一个URL的表现形式 
+调用如: 
+shareFile.icc.mp4?shareKey=xxxx
+shareFile.icc.mov?shareKey=xxx
 
 | 请求方法 | GET |
 | -------- | --- |

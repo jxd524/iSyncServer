@@ -649,7 +649,7 @@ class DataManager(JxdSqlDataBasic):
         values.append(aUploadUserId)
         strWhere = "uploadUserId = ? and ({})".format(self.FormatFieldValues(where, values, "or"))
         sql = "select * from {} where {}".format(_kFileTableName, strWhere)
-        print(sql)
+        # print(sql)
         return self.fetch(sql, values, False)
 
 

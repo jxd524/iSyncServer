@@ -407,8 +407,8 @@ def appGetThumb():
     return responseHelp.sendFile(strFileOut);
 
 
-@app.route("/downFile.icc")
-def appDownFile():
+@app.route("/downFile.ic<ext>")
+def appDownFile(ext):
     "下载指定ID的资源"
     result = _getFileInfo(None, None)
     if not result[kParamForResult]:
@@ -435,8 +435,8 @@ def appShareFileUrl():
     return responseHelp.buildSuccessResponseData(key)
 
 
-@app.route("/shareFile.icc")
-def appGetShareFile():
+@app.route("/shareFile.ic<ext>")
+def appGetShareFile(ext):
     "根据分享的KEY获取文件内容"
     result = checkApiParam(False, ("shareKey",))
     if not result[kParamForResult]:
