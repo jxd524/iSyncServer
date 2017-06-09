@@ -459,7 +459,7 @@ def appUploadFileInfo():
         {"name": "name", "checkfunc": lambda v: v if len(v) > 0 and len(v) <= 100 else None},
         {"name": "size", "checkfunc": unit.checkParamForInt},
         {"name": "type", "checkfunc": unit.checkParamForFileType},
-        {"name": "ext", "checkfunc": lambda v: v if len(v) <= 10 else None, "default": None},
+        {"name": "ext", "checkfunc": lambda v: v if len(v) <= 10 else None},
         {"name": "statusForThumb", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
         {"name": "statusForScreen", "checkfunc": funcCheckStatus, "default": defines.kFileStatusFromLocal},
         {"name": "createTime", "checkfunc": unit.checkParamForTimestamp, "default": curTimestamp},
@@ -576,7 +576,7 @@ def appUploadFile():
         upFileInfos[strDbFiledName] = defines.kFileStatusFromUploaded
         upFileNames[aFileName] = strFullFileName
 
-        print("will open file: ", strFullFileName, "; beginPos: ", nBeginPos)
+        # print("will open file: ", strFullFileName, "; beginPos: ", nBeginPos)
         f = open(strFullFileName, "a+b")
         f.truncate(nBeginPos)
         f.seek(0, os.SEEK_END)
