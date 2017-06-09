@@ -217,6 +217,7 @@ class DataManager(JxdSqlDataBasic):
         row = self.select(_kUserTableName, {"name": aUserName, "password": aPassword})
         if row is None:
             #查询不到直接退出
+            print(aUserName, aPassword)
             return None
 
         #更新最后登陆时间
@@ -670,12 +671,13 @@ class DataManager(JxdSqlDataBasic):
         where = {formatInField("rootCatalogId", aRootIds): None,
                 funcNotEqual("statusForOrigin"): None,
                 funcNotEqual("statusForThumb"): None,
-                funcNotEqual("statusForScreen"): None,
-                "uploadUserId": aUploadUserId}
+                funcNotEqual("statusForScreen"): None}
         if aPids and len(aPids) > 0:
             where[formatInField("catalogId", aPids)] = None
         if aTypes and len(aTypes) > 0:
             where[formatInField("type", aTypes)] = None
+        if aUploadUserId:
+            where[lambda:"uploadUserId = {}".format(aUploadUserId)] = None
         strWhere = self.FormatFieldValues(where, None, "and")
 
         if aSort != None and aSort != 0:
@@ -701,7 +703,7 @@ class DataManager(JxdSqlDataBasic):
         #查询内容
         strWhere += " limit {begin}, {count}".format(begin = nLimitBegin, count = nLimitCount)
         sql = "select * from {} where {}".format(_kFileTableName, strWhere)
-        # print(sql)
+        print(sql)
         fileInfos = self.fetch(sql, fetchone = False)
 
         #分页信息
@@ -850,6 +852,9 @@ def buildFileInfoList(aFileRows, aDbObject):
     或者直接就是一个 {catalogId: path} 对象
     """
     result = []
+    if not aFileRows:
+        return result
+    
     irp = None
     def _buildIdRelatePath():
         #嵌套函数实现一次查询,多次使用

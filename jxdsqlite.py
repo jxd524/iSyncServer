@@ -54,7 +54,7 @@ class JxdSqlDataBasic(object):
             result = cur.fetchone() if fetchone else cur.fetchall();
             return result;
         except Exception as e:
-            print(e, sql, aArgs)
+            print(e, aSql, aArgs)
         finally:
             cur.close();
         return None
@@ -79,6 +79,8 @@ class JxdSqlDataBasic(object):
         values = [];
         strWhere = self.FormatFieldValues(aWheres, values, "and");
         sql = "select {} from {} where {}".format(aFields, aTableName, strWhere);
+        # print(values)
+        # print(sql)
         try:
             cur = self.cursor();
             cur.execute(sql, values);
@@ -170,7 +172,7 @@ class JxdSqlDataBasic(object):
                 if bAddSpaceSign and len(strResult) > 0:
                     strResult += " " + aSpaceSign + " "
                 strResult += r
-                if value != None:
+                if value != None and aAppendArray != None:
                     aAppendArray.append(value)
 
         return strResult;
