@@ -703,7 +703,7 @@ class DataManager(JxdSqlDataBasic):
         #查询内容
         strWhere += " limit {begin}, {count}".format(begin = nLimitBegin, count = nLimitCount)
         sql = "select * from {} where {}".format(_kFileTableName, strWhere)
-        print(sql)
+        # print(sql)
         fileInfos = self.fetch(sql, fetchone = False)
 
         #分页信息
