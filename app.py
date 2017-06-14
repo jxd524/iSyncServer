@@ -7,7 +7,7 @@ __author__ = "Terry<jxd524@163.com>"
 flask 框架处理
 """
 
-import os, time
+import os
 import werkzeug
 from werkzeug import datastructures, secure_filename
 from flask import Flask, request, session, g, abort
@@ -240,7 +240,7 @@ def appGetCatalogs():
 @app.route("/createCatalog.icc", methods=["POST"])
 def appCreateCatalog():
     "创建目录"
-    curTimestamp = time.time()
+    curTimestamp = unit.getTimeInt()
     result = checkApiParam(True, [
         {"name": "parentId", "checkfunc": unit.checkParamForInt},
         {"name": "name", "checkfunc": lambda v: v if len(v) >= 1 and len(v) < 100 else None},
@@ -453,7 +453,7 @@ def appGetShareFile(ext):
 def appUploadFileInfo():
     "上传文件信息"
     funcCheckStatus = lambda v: int(v) if int(v) in (defines.kFileStatusFromLocal, defines.kFileStatusFromUploading) else defines.kFileStatusFromLocal
-    curTimestamp = time.time()
+    curTimestamp = unit.getTimeInt()
     result = checkApiParam(True, (
         {"name": "cid", "checkfunc": unit.checkParamForInt},
         {"name": "name", "checkfunc": lambda v: v if len(v) > 0 and len(v) <= 100 else None},
@@ -489,6 +489,7 @@ def appUploadFileInfo():
     param["uploadUserId"] = loginInfo.userId
     param["fileName"] = strFileName
     param["statusForOrigin"] = defines.kFileStatusFromUploading
+    param["uploadTime"] = unit.getTimeInt()
     nNewFileId = db.addFile(catalogRow[dataManager.kCatalogFieldRootId], nCatalogId, param)
     fileRow = db.getFileByIdAndRootIds(nNewFileId, None)
     funcForIdRelatePath = lambda : db.getCatalogIdRelatePathInfo(nCatalogId)

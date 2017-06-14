@@ -351,8 +351,10 @@ def makeValue(aDict, aKey, aDefaultValue):
     "确保容器存在指定key,value"
     v = aDict.get(aKey)
     if v == None:
-        aDict[aKey] = aDefaultValue
-
+        if callable(aDefaultValue):
+            aDict[aKey] = aDefaultValue()
+        else:
+            aDict[aKey] = aDefaultValue
 
 def removePath(aPath):
     "删除指定路径或文件,可为字符串或数组"
@@ -441,8 +443,13 @@ def MD5FileWithName(aFileName, aMaxBlockSize=1024 * 64):
             md5.update(data)
     return md5.hexdigest()
 
+def getTimeInt():
+    "获取1970到现在的秒数"
+    return int( time.time() )
+
 
 if __name__ == "__main__":
     print("begin")
-    print( judgeIntStringsInList("1, 2", [1, 3]))
+    # print( judgeIntStringsInList("1, 2", [1, 3]))
+    print(getTimeInt())
     print("finished")

@@ -8,7 +8,7 @@ db manager
 
 __author__="Terry<jxd524@163.com>"
 
-import os, sys, time
+import os, sys
 import shutil
 from jxdsqlite import JxdSqlDataBasic
 import defines, log, unit
@@ -54,9 +54,9 @@ def _UserCreateTableSQL():
                 id integer primary key autoIncrement,
                 name varchar(100) collate nocase UNIQUE,
                 password varchar(32),
-                createTime timestamp default(datetime('now', 'localtime')),
-                lastLoginDate timestamp default(datetime('now', 'localtime')),
-                lastModifyTime timestamp default(datetime('now', 'localtime')),
+                createTime integer,
+                lastLoginDate integer,
+                lastModifyTime integer,
                 helpInt integer,
                 helpText text
             )""" % _kUserTableName
@@ -84,8 +84,8 @@ def _CatalogCreateTableSQL():
                 rootId  integer,
                 parentId integer,
                 name varchar(100) collate nocase,
-                createTime timestamp default(datetime('now', 'localtime')),
-                lastModifyTime timestamp default(datetime('now', 'localtime')),
+                createTime integer,
+                lastModifyTime integer,
                 memo varchar(1024),
                 helpInt integer,
                 helpText text
@@ -131,10 +131,10 @@ def _FileCreateTableSQL():
                 fileName varchar(100) collate nocase,
                 ext varchar(10)  collate nocase,
                 name varchar(100) collate nocase,
-                createTime timestamp default(datetime('now', 'localtime')),
-                uploadTime timestamp,
-                importTime timestamp,
-                lastModifyTime timestamp default(datetime('now', 'localtime')),
+                createTime integer,
+                uploadTime integer,
+                importTime integer,
+                lastModifyTime integer,
                 size integer,
                 type integer,
                 duration float,
@@ -194,11 +194,13 @@ class DataManager(JxdSqlDataBasic):
 #public function -- User
     def makeUser(self, aUserName, aPassword):
         "若插入不成功,则判断修改密码,返回ID"
+        curTime = unit.getTimeInt()
         fieldValues = {
                 "name": aUserName,
                 "password": aPassword,
-                "createTime": time.time(), 
-                "lastLoginDate": time.time()}
+                "createTime": curTime,
+                "lastLoginDate": curTime,
+                "lastModifyTime": curTime}
         nId = self.insert(_kUserTableName, fieldValues)
         if nId is None:
             #插入不成功,正常情况是数据已经存在
@@ -217,11 +219,10 @@ class DataManager(JxdSqlDataBasic):
         row = self.select(_kUserTableName, {"name": aUserName, "password": aPassword})
         if row is None:
             #查询不到直接退出
-            print(aUserName, aPassword)
             return None
 
         #更新最后登陆时间
-        self.update(_kUserTableName, {"id": row[kUserFieldId]}, {"lastLoginDate": time.time()})
+        self.update(_kUserTableName, {"id": row[kUserFieldId]}, {"lastLoginDate": unit.getTimeInt()})
         return row
 
 
@@ -299,6 +300,7 @@ class DataManager(JxdSqlDataBasic):
                 aCatalogInfo["parentId"] = pci[kCatalogFieldId] if pci else -1
                 aCatalogInfo["rootId"] = pci[kCatalogFieldRootId] if pci else -1
 
+            aCatalogInfo["lastModifyTime"] = unit.getTimeInt()
             nId = self.insert(_kCatalogTableName, aCatalogInfo)
         # end if
         result = self.select(_kCatalogTableName, {"id": nId})
@@ -316,12 +318,13 @@ class DataManager(JxdSqlDataBasic):
         if aLimitStrRootIds != None:
             # 只有传递 rootids 信息时,才进行修改(客户端才需要传递)
             nNewParentId = aCatalogInfo.get("parentId")
-            if nNewParentId != None:
+            if nNewParentId != None and nNewParentId > 0:
                 sql = """select a.rootId as newRootId, b.rootId as curRootid, b.parentId
                     from {table} a, {table} b
                     where a.id = ? and a.rootid in ({limitIds}) and
                         b.id = ? and b.rootid in ({limitIds})
                 """.format(table = _kCatalogTableName, limitIds = aLimitStrRootIds)
+                # print(sql)
                 row = self.fetch(sql, (nNewParentId, aId))
                 if not row:
                     return False
@@ -333,11 +336,18 @@ class DataManager(JxdSqlDataBasic):
                     bUpdateFileTable = True
                     nNewRootId = row[0]
                     aCatalogInfo["rootId"] = nNewRootId
+            else:
+                aCatalogInfo.pop("parentId", None)
+        else:
+            # 若没有rootIds,则不对parentId进行处理
+            aCatalogInfo.pop("parentId", None)
+
+
 
         #更新Catalog表
         afv = None
         if not aCatalogInfo.get("lastModifyTime"):
-            afv = {"lastModifyTime": time.time()}
+            afv = {"lastModifyTime": unit.getTimeInt()}
         bOK = self.update(_kCatalogTableName, {
             "id": aId,
             formatInField("rootId", aLimitStrRootIds): None},
@@ -533,7 +543,7 @@ class DataManager(JxdSqlDataBasic):
         """添加文件信息
             直接添加,调用者必须确保键值的正确性
         """
-        curTime = time.time()
+        curTime = unit.getTimeInt()
         aFileInfo["rootCatalogId"] = aRootId
         aFileInfo["realCatalogId"] = aRealCatalogId
         makeValue(aFileInfo, "catalogId", aRealCatalogId)
@@ -577,7 +587,7 @@ class DataManager(JxdSqlDataBasic):
         # 更新数据
         afv = None
         if aFileInfo.get("lastModifyTime") == None:
-            afv = {"lastModifyTime": time.time()}
+            afv = {"lastModifyTime": unit.getTimeInt()}
         bOK = self.update(_kFileTableName,
                 {"id": aFileId,
                     formatInField("rootCatalogId", aLimitStrRootIds): None}, 
@@ -754,7 +764,7 @@ class DataManager(JxdSqlDataBasic):
         "设置不同表记录的HelpInfo信息"
         strTableName, where = self._buildHelpQueryInfo(aTableType, aRecordId, aStrRootIds)
         self.update(strTableName, where, {"helpInt": aHelpInt, "helpText": aHelpText}, 
-                {"lastModifyTime": time.time()})
+                {"lastModifyTime": unit.getTimeInt()})
 
 
 #help function - global
@@ -873,6 +883,9 @@ def buildFileInfoList(aFileRows, aDbObject):
 if __name__ == "__main__":
     print("begin test")
     # db = DataManager()
+    # db.makeUser("xx", "jddjd")
+    # r = db.getUser("Terry", "123")
+    # print( buildUserInfo(r) )
     # db.updateFile(30, {"catalogId": 8}, "1,2")
     # db.updateCatalog(9, {"parentId": 2}, "1, 2")
     # db.deleteCatalogs("7", "1,2")

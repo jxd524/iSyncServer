@@ -9,7 +9,7 @@
 __author__="Terry<jxd524@163.com>"
 
 import os,sys, getopt, json
-import time, datetime
+import datetime
 import defines, unit
 import dataManager
 from dataManager import DataManager
@@ -97,7 +97,14 @@ class ScanDisk(object):
 #prinvate function
     def _makeCatalog(self, aPath, aDirList, aRootId = None, aParentId = None):
         "确保路径写入数据库,存在则查询,不存在则插入"
-        info = self.dbManager.makeCatalog({"path": aPath, "rootId": aRootId, "parentId": aParentId})
+        fStat = os.stat(aPath)
+        #Create time
+        nCreateTime = fStat.st_ctime
+        if nCreateTime > fStat.st_mtime:
+            nCreateTime = fStat.st_mtime
+        if nCreateTime > fStat.st_atime:
+            nCreateTime = fStat.st_atime
+        info = self.dbManager.makeCatalog({"path": aPath, "rootId": aRootId, "parentId": aParentId, "createTime": int(nCreateTime)})
         nRootId = info[dataManager.kCatalogFieldRootId]
         nPathId = info[dataManager.kCatalogFieldId]
         aPath = info[dataManager.kCatalogFieldPath]
@@ -280,8 +287,6 @@ def makeUsers(aDataManager, aUsers):
 if __name__ == "__main__":
     print("准备扫描...")
     main()
-    # s = "/Users/terry/abc.gif"
-    # print( os.path.splitext(s)[1][1:] )
     print("扫描结束")
 
 
