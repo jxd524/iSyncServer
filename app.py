@@ -41,6 +41,44 @@ def teardown_request(exception):
         g.__dataManager = None;
 
 #help function
+def _makeUserRootPath(aUserId):
+    """确保指定用户存在根目录, 
+    返回: BOOL(成功与否), 
+        成功: rootIdList->()
+        失败: response
+    """
+    db = _getDbManager()
+    rootIdList = db.getUserRootCatalogs(aUserId)
+    if not rootIdList or len(rootIdList) == 0:
+        #没有根目录: 根据配置生成默认路径,并添加到数据库
+        #判断目录
+        strPath = configs.defaultUserPath(aUserId)
+        if not os.path.isdir(strPath):
+            logObject().error("user: {} do not set root path".format(aUserId))
+            return False, responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_NotSetRootPath)
+
+        #生成记录
+        fStat = os.stat(strPath)
+        nCreateTime = fStat.st_ctime
+        if nCreateTime > fStat.st_mtime:
+            nCreateTime = fStat.st_mtime
+        if nCreateTime > fStat.st_atime:
+            nCreateTime = fStat.st_atime
+        ci = db.makeCatalog({"path": strPath, "createTime": int(nCreateTime), "name": "iSyncRoot"})
+        nRootId = ci[dataManager.kCatalogFieldRootId] if ci else None
+        if nRootId == None:
+            logObject().error("can not add root catelog: {} for user: {}".format(strPath, aUserId))
+            return False, responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError)
+
+        db.makeUserAssociate(aUserId, nRootId);
+        rootIdList = (nRootId,);
+
+    #成功,写入session信息
+    key = LoginInfo.MakeObject(aUserId, rootIdList);
+    session[defines.kSessionUserKey] = key;
+
+    return True, None
+
 def _getFileInfo(aOtherParams, aValideFileTypes):
     """获取指定文件资源,返回值参考 checkApiParam, 若成功时,返回值result[kParamForRequestParams]会加上
         "_x_file": 资源对应的全路径
@@ -99,7 +137,6 @@ def _getFileInfo(aOtherParams, aValideFileTypes):
 def appHome():
     return("hello world");
 
-
 @app.route("/login.icc", methods=["POST", "GET"])
 def appLogin():
     "登陆"
@@ -116,31 +153,11 @@ def appLogin():
     #查询根目录信息
     nUserId = row[dataManager.kUserFieldId]
     strUserName = row[dataManager.kUserFieldName]
-    rootIdList = db.getUserRootCatalogs(nUserId);
-    if not rootIdList or len(rootIdList) == 0:
-        #无根目录
-        strPath = configs.defaultUserPath(strUserName, nUserId)
-        if not os.path.isdir(strPath):
-            logObject().error("user: {} do not set root path".format(nUserId))
-            return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_NotSetRootPath)
+    bOK, resp = _makeUserRootPath(nUserId)
+    if not bOK:
+        return resp
 
-        ci = db.makeCatalog({"path": strPath})
-        nRootId = ci[dataManager.kCatalogFieldRootId] if ci else None
-        if nRootId == None:
-            logObject().error("can not add root catelog: {} for user: {}".format(strPath, nUserId))
-            return responseHelp.buildErrorResponseData(responseHelp.kCmdServerError_DbDataError)
-
-        db.makeUserAssociate(nUserId, nRootId);
-        rootIdList = (nRootId);
-
-
-    #登录成功,写入session信息
-    key = LoginInfo.MakeObject(nUserId, rootIdList);
-    session[defines.kSessionUserKey] = key;
-
-    #生成返回值
     userInfo = dataManager.buildUserInfo(row)
-    userInfo["rootIds"] = LoginInfo.GetObject(key).rootIdsString
     return responseHelp.buildSuccessResponseData(userInfo)
 
 
@@ -231,6 +248,13 @@ def appGetCatalogs():
     db = _getDbManager()
     dbItems = db.getCatalogsByParentIds(strParentIds, loginInfo.rootIdsString)
 
+    if strParentIds == "-1" and (not dbItems or len(dbItems) == 0):
+        bOK, resp = _makeUserRootPath(loginInfo.userId)
+        if not bOK:
+            return resp
+        else:
+            dbItems = db.getCatalogsByParentIds(strParentIds, loginInfo.rootIdsString)
+
     #生成数据
     ltData = [];
     for item in dbItems:
@@ -310,8 +334,13 @@ def appUpdateCatalog():
     bOK = False
     if len(param) > 0:
         db = _getDbManager()
-        bOk = db.updateCatalog(nId, param, loginInfo.rootIdsString)
-    return responseHelp.buildSuccessResponseData("OK") if bOk else responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
+        bOK = db.updateCatalog(nId, param, loginInfo.rootIdsString)
+
+    if bOK:
+        item = db.getCatalogById(nId)
+        return responseHelp.buildSuccessResponseData(dataManager.buildCatalogInfo(item, db))
+
+    return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
 
 
 @app.route("/files.icc", methods=["GET"])
@@ -515,7 +544,7 @@ def appUploadingInfo():
 @app.route("/uploadFile.icc", methods=["POST"])
 def appUploadFile():
     "上传文件"
-    print(request.args)
+    # print(request.args)
     result = responseHelp.checkApiParamWithRequestValues(True, (
         {"name": "id", "checkfunc": unit.checkParamForInt},
         {"name": "obp", "checkfunc": unit.checkParamForInt, "default": 0},
@@ -675,7 +704,12 @@ def appUpdateFile():
     if len(param) > 0:
         db = _getDbManager()
         bOK = db.updateFile(nFileId, param, loginInfo.rootIdsString)
-    return responseHelp.buildSuccessResponseData("OK") if bOK else responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
+    if bOK:
+        fileRow = db.getFileByIdAndRootIds(nFileId, loginInfo.rootIdsString)
+        funcForIdRelatePath = lambda : db.getCatalogIdRelatePathInfo(fileRow[dataManager.kFileFieldRealCatalogId])
+        fileInfo = dataManager.buildFileInfo(fileRow, funcForIdRelatePath)
+        return responseHelp.buildSuccessResponseData(fileInfo)
+    return responseHelp.buildErrorResponseData(responseHelp.kCmdUserError_NotModify)
 
 
 

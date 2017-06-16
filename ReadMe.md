@@ -195,7 +195,6 @@ kFileTypeFile       = 1 << 4
     "name": "displayName",
     "createTime": 123123123.00,
     "lastLoginDate": 1480665083.080785,
-    "rootIds": "1,5,10",
     "helpInt": 20,
     "helpText": "only for client"
 }
@@ -369,7 +368,7 @@ PS:
 | helpInt | int | 可选, 辅助信息 |
 | helpText | string | 可选, 辅助信息 |
 |||
-| 响应Data | "提示信息" |
+| 响应Data | **[CatalogInfo](#catalogInfo)** |
 
 
 ## 文件相关接口
@@ -612,5 +611,5 @@ shareFile.icc.mov?shareKey=xxx
 | helpInt | int | 可选,辅助信息 |
 | helpText | string | 可选, 辅助信息 |
 |||
-| 响应Data | "提示信息" |
+| 响应Data | [FileInfo](#fileInfo) |
 

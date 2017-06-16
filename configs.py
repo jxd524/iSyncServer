@@ -36,7 +36,7 @@ def thumbPath():
     return __gThumbPath;
 
 __gDefaultUserPath = "*";
-def defaultUserPath(aUserName, aUserId):
+def defaultUserPath(aUserId):
     """
     用户默认路径
     user default path
@@ -44,7 +44,7 @@ def defaultUserPath(aUserName, aUserId):
     global __gDefaultUserPath
     if __gDefaultUserPath == "*":
         __gDefaultUserPath = AppConfig().defaultUserPath
-    strPathName = "{}_{}".format(aUserName, aUserId)
+    strPathName = "{}".format(aUserId)
     defPath = os.path.join(__gDefaultUserPath, strPathName)
     if not os.path.isdir(defPath):
         log.logObject().info("create path: {}".format(defPath))

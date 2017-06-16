@@ -304,7 +304,7 @@ def checkParamForIntList(aParam):
 def checkParamForTimestamp(aParam):
     "检查是否可转成Datetime对象"
     dt = datetime.datetime.fromtimestamp(float(aParam))
-    return dt.timestamp()
+    return int(dt.timestamp())
 
 
 def judgeIntStringsInList(aIntStrings, aList):

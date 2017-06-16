@@ -377,22 +377,22 @@ class DataManager(JxdSqlDataBasic):
                         {"rootCatalogId": parentCatInfo[kCatalogFieldRootId]})
 
 
-    def deleteCatalogs(self, aIds, aLimitStrRootIds):
+    def deleteCatalogs(self, aDelCids, aLimitStrRootIds):
         "删除指定目录"
-        if aIds == None or aLimitStrRootIds == None:
+        if aDelCids == None or aLimitStrRootIds == None:
             return
         #递归查询所有将被删除的目录信息
         sql = """
             with recursive
                 cids(x) AS(
                     select id from {table} 
-                        where id in ({ids}) and rootId in ({limitIds}) and parentId != -1
+                        where id in ({ids}) and rootId in ({limitIds})
                     union all
                     select id from {table}, cids
                         where {table}.parentid = cids.x
                 )
             select * from {table} where {table}.id in cids
-            """.format(table=_kCatalogTableName, ids=aIds, limitIds=aLimitStrRootIds)
+            """.format(table=_kCatalogTableName, ids=aDelCids, limitIds=aLimitStrRootIds)
         rows = self.fetch(sql, fetchone = False)
         if not rows or len(rows) == 0:
             return
@@ -421,14 +421,14 @@ class DataManager(JxdSqlDataBasic):
         #删除记录
         self.delete(_kCatalogTableName, {formatInField("id",cids): None})
         self.delete(_kFileTableName, {formatInField("catalogId", cids): None})
+        self.delete(_kUserAssociateTableName, {formatInField("rootCatalogId", aLimitStrRootIds): None})
 
         #删除文件
         unit.removePath(waitDeletePaths)
 
 
     def _clearAllBuildFiles(self, aCids):
-        rows = self.select(_kFileTableName, {
-            formatInField("catalogId", aCids): None}, aOneRecord = False)
+        rows = self.select(_kFileTableName, {formatInField("catalogId", aCids): None}, aOneRecord = False)
         if rows and len(rows) > 0:
             self._defFilesRes(rows, 2)
 
@@ -888,7 +888,7 @@ if __name__ == "__main__":
     # print( buildUserInfo(r) )
     # db.updateFile(30, {"catalogId": 8}, "1,2")
     # db.updateCatalog(9, {"parentId": 2}, "1, 2")
-    # db.deleteCatalogs("7", "1,2")
+    # db.deleteCatalogs("1,2", "1,2")
     # db.deleteFiles("103, 104, 105, 106, 107", "1, 2")
     # rows = db.getFileByUploading(1)
     # print(buildFileInfoList(rows, db))
