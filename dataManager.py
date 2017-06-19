@@ -588,7 +588,7 @@ class DataManager(JxdSqlDataBasic):
         afv = None
         if aFileInfo.get("lastModifyTime") == None:
             afv = {"lastModifyTime": unit.getTimeInt()}
-        bOK = self.update(_kFileTableName,
+        return self.update(_kFileTableName,
                 {"id": aFileId,
                     formatInField("rootCatalogId", aLimitStrRootIds): None}, 
                 aFileInfo, afv)
