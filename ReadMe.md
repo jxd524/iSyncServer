@@ -10,30 +10,29 @@ excerpt: iSync iPrivate 文件管理 同步 云盘
 * content
 {:toc}
 
-# 目标与简单说明
+# 简介 &  Introduction
+　　借助[树莓派](https://www.raspberrypi.org/),通过HTTP协议对移动硬盘进行操作。对指定路径的文件进行扫描后写入数据库,提供一系列的API对数据进行增删查改功能.方便家庭成员对其媒体文件的访问
 
-文件管理系统.
-目标是安装在[树莓派](https://www.raspberrypi.org/)上,提供家庭媒体文件的操作,包含同步,浏览等操作
+　　**服务端**需要安装:python3, flask. 若需要对生成媒体文件的缩略图,采集媒体文件的信息,则需要再安装: ffmpeg, Pillow.
 
-1. 服务器实现: flask + python.
-    以HTTP协议实现JSON数据格式的API接口
-    若服务端需要扫描已有数据,则需要安装库: ffmpeg, Pillow
-        ffmpeg: 用于获取媒体的信息,生成视频缩略图
-        Pillow: 用于生成图片的缩略图(用ffmepg来生成图片的缩略图,某些图片格式生成的图片与原图不一致)
-
-2. 客户端需要实现下文相关接口
+　　**客户端**需要根据需求,实现以下API接口.已提供的iOS客户端: [iPrivate](https://itunes.apple.com/us/app/iprivate-protect-your-privacy-photo-video/id992360900?l=zh&ls=1&mt=8)
 
 
-# 安装
+　　With the [raspberry pie](https://www.raspberrypi.org/),through the HTTP protocol on the hard disk to operate. After writing to the database to scan files in the specified path,provide a range of API for addition,deletion,change,search.Convenient access to their family members.
 
-后续再作说明
+　　**The server **needs to be installed: python3, flask. If you need to generate thumbnails of media files or gether informatiom, you need to install: ffmpeg, Pillow.
+
+　　**The client** needs to implement the following API interface as required. The provided iOS client: [iPrivate](https://itunes.apple.com/us/app/iprivate-protect-your-privacy-photo-video/id992360900?l=zh&ls=1&mt=8)
+
+# 安装 & Install
+
+## 在树莓派上安装服务器 & Install the server on the raspberry
 
 
-# App配置文件
+# App配置文件 & App configuration file
 
-若没有配置文件,则使用默认值
-**appConfigs.json**: 配置整个服务器的变量.以下内容有效
-
+在根目录下创建名为 **appConfigs.json** 的配置文件.它将影响整个服务器.若没有配置文件,则使用默认值
+以下字段有效
 **logFileName**: 日志存在路径,默认是 ./building/appLog.log
 **thumbPath**: 生成缩略图时存放的总路径,默认 ./building/thumbs
 **defaultUserPath**: 默认的用户路径,只有当创建了用户,但此用户还没有一个目录时有效,默认 ./building/users
@@ -42,29 +41,63 @@ excerpt: iSync iPrivate 文件管理 同步 云盘
 **onlineTimeout**: 在线人数极值,超过此值,则会进行超时处理,默认100
 **onlineTimeout**: 在线用户无活动保持的最大时间,默认 3600, 单位: 秒
 
+Create a configuration file named **appConfigs.json** in the root directory. It will affect the entire server. If there is no configuration file, the default value is used
+The following fields are valid
+**logFileName**: The log exists, the default is ./building/appLog.log
+**thumbPath**: The total path stored when generating thumbnails, default ./building/thumbs
+**defaultUserPath**: The default user path, only when the user is created, but this user does not have a directory valid, default ./building/users
+**shareUrlThreshold**: share the maximum number of URLs, the default 1000,
+**shareUrlTimeout**: Share the maximum cache time of the URL, the default 1800, in seconds
+**onlineTimeout**: online number of extreme values, more than this value, it will be overtime processing, the default 100
+**onlineTimeout**: The maximum time that an online user has no activity to stay, defaults to 3600, in seconds
+
+eg:
+```bash
+{
+"logFileName": "/app/iSyncServer/appLog.txt",
+"thumbPath": "/app/iSyncServer/building/thumbs"
+}
+```
 
 <span id="scanDisk"/>
-# 扫描数据(附加功能)
+# 扫描数据(附加功能) & Scan data (additional function)
 
-如果不想将已有文件加入到系统,可不理会此功能
-为方便处理磁盘数据,提供了 **scanDisk.py** 来扫描数据,具体参数见下表
+为方便处理磁盘数据,提供了 **scanDisk.py** 来递归扫描指定的目录,将对应的文件和用户信息写入到数据库中
+配置文件外层是一个数组,每个对象拥有 **paths** 和 **users** 属性
+**users**: 字典类型,定义用户名与密码
+**paths**: 包含字符串的数组,定义要扫描的路径信息
+**mergeRootPaths**: 布尔类型, 对已经加入到数据库中的路径进行判断,将数据库中的 RootPath 与计算机文件系统路径相一致.默认为 True
 
-|参数名| 作用|
-|----- | ----|
-| 不带参数 | 根据同目录下的**scanConfig.json**文件来扫描数据|
-| -i(fileName) | 提供指定格式的 JSON 文件,这是最全面的方式 |
-使用例子:
+具体参数见下表
+
+
+In order to facilitate the processing of disk data, provided ** scanDisk.py ** to recursively scan the specified directory, the corresponding file and user information written to the database
+
+The outer layer of the configuration file is an array, each object has **paths** and **users** properties
+**users**: Dictionary type. Defines the user name and password
+**paths**: An array containing strings. Defines the path information to be scanned
+**mergeRootPaths**: Boolean type. The path has been added to the database to determine the database RootPath and the computer file system path consistent with the default is True
+
+See the table below for specific parameters
+
+|参数名 & param | 作用 & role|
+|----- | ---- |
+| 不带参数 <br> Without parameters | 根据同目录下的**scanConfig.json**文件来扫描数据 <br> Scan the data according to the **scanConfig.json** file in the same directory |
+| -i(fileName) | 提供指定格式的JSON文件全路径 <br> Provides the full path of the JSON file in the specified format |
+
+
 
 ```bash
 #根据同目录下 scanConfig.json 来扫描数据
+#Scan data according to scanConfig.json in the same directory
 python scanDisk.py
 
 #使用配置文件 sd.json 来扫描数据
+#Use the configuration file sd.json to scan the data
 python scanDisk.py -i sd.json
 ```
 
-### 配置文件例子
-
+eg of scanConfig.json:
 ```json
 [
     {
@@ -90,77 +123,105 @@ python scanDisk.py -i sd.json
 ]
 ```
 
-PS:
-配置文件外层是一个数组,每个对象拥有 **paths** 和 **users** 两个属性
-**users**: 定义用户名与密码
-**paths**: 定义要扫描的路径信息
-**mergeRootPaths**: 对已经加入到数据库中的路径进行判断,将数据库中的 RootPath 与计算机文件系统路径相一致.默认为 True
 
+# 数据库表结构说明 & Database table structure description
 
-# 服务端数据结构说明
-
-服务端只用了4张表来对数据做记录,具体定义,可参考源代码.这里只做了简单说明
+服务端使用python内建支持的数据库: sqlite3. 只用了4张表来对数据做记录,具体定义,可参考源代码.这里只做了简单说明
 1. User: 用户表
 2. Catalog: 目录表,记录目录的相关信息
 3. Files: 文件表,记录文件的相关信息
 4. UserAssociate: 用户与目录的关系表,记录用户对拥有读写操作的根目录信息
 
-对于前三个表,都有 "HelpInfo" 的信息,这些字段对服务端来说是没有意义的.只负责保存.
-只对客户端有意义,客户端可以根据需求赋不同含义.如我在 "iPrivate" 客户端,定义它是同步ID
+对于前三个表,都有[HelpInfo](#helpInfo)信息,这些字段对服务端来说是没有意义的.只负责保存.
+只对客户端有意义,客户端可以根据需求赋不同含义.
 
 
-# 接口描述
+Server use python built-in support for the database: sqlite3. Only four tables to record the data. You can review the source code for detail information. Here only a brief description
+1. User: User table
+2. Catalog: directory table, record the directory of the relevant information
+3. Files: file table, record the file information
+4. UserAssociate: user and directory relationship table, record the user has read and write operations of the root directory information
+
+For the first three tables, they all have [HelpInfo](#helpInfo) information, which is meaningless to the server.
+Only meaningful to the client, the client can be given different needs according to the needs.
+
+
+
+
+
+# API接口描述 & API Interface description
 
 定义接口的请求与响应,若无说明,则
 1. 请求与响应都是通过**JSON**格式进行交互
 2. 接口都需要**登陆**后才能使用
 
+Define the request and response of the interface, if not
+1. The request and response are interacted through the **JSON** format
+2. Interface need to **login** before use
 
-## 命令响应返回格式：
+## 命令响应返回格式 & The command responds to the return format
 
 ```json
 {
     "code": 0,
     "msg": "error message",
-    "data": 不同的命令有不同的结构
+    "data": 不同的命令有不同的结构 & Different commands have different structures
 }
 ```
 
-## 类型定义
+## 类型定义 & Type definition
 
-<span id="datetime">**datetime**</span>:包含日期与时间的类型. 
-1970到现在的秒数,如 2017-04-19 03:06:44 +0000  表示为: 1492571204.221604
+<span id="datetime">**datetime**</span>:包含日期与时间的类型.
+1970到现在的秒数,如 2017-04-19 03:06:44 +0000  表示为: 1492571204
+
+Contains the type of date and time
+1970 to the present number of seconds. eg 2017-04-19 03:06:44 +0000  Expressed as: 1492571204
+
 ```json
-typedef datetime float
+typedef datetime int
 ```
 
 <span id="orientation">**orientation**</span>: 图片或视频的旋转方向
 在扫描文件时会生成,在生成缩略图时会用到,数据库中记录着原始的方向,若为0,表示不需要旋转
 
-与iOS中UIImageOrientation的具体对应关系表
+The direction of rotation of a picture or video
+In the scan file will be generated and building thumbnails will be used, the database records the original direction, if 0, that does not need to rotate
 
-| UIImageOrientation | 原始exif中Orientation 值 | 生成缩略图时旋转 |
+与iOS中UIImageOrientation的具体对应关系表
+The specific relationship between UIImageOrientation in iOS table
+
+| UIImageOrientation | 原始exif中Orientation 值 <br> The original exif in the orientation value | 生成缩略图时旋转 <br> Rotate when generating thumbnails |
 | ------ | ------ | ------ |
-| UIImageOrientationUp | 1 | 不需要旋转 |
+| UIImageOrientationUp | 1 | 不需要旋转 <br> Do not need to rotate |
 | UIImageOrientationDown | 3 | 180° |
-| UIImageOrientationLeft | 6 | 顺时针90° |
-| UIImageOrientationRight | 8 | 逆时针90° |
-| UIImageOrientationUpMirrored | 2 | 水平翻转 |
-| UIImageOrientationDownMirrored | 4 | 垂直翻转 |
-| UIImageOrientationLeftMirrored | 5 | 顺时针90°+水平翻转 |
-| UIImageOrientationRightMirrored | 7 | 顺时针90°+垂直翻转 |
+| UIImageOrientationLeft | 6 | 顺时针90° <br> Clockwise 90° |
+| UIImageOrientationRight | 8 | 逆时针90° <br> CCW 90° |
+| UIImageOrientationUpMirrored | 2 | 水平翻转 <br> horizontal flip|
+| UIImageOrientationDownMirrored | 4 | 垂直翻转 <br> Vertical flip |
+| UIImageOrientationLeftMirrored | 5 | 顺时针90°+水平翻转 <br> Clockwise 90° + horizontal flip |
+| UIImageOrientationRightMirrored | 7 | 顺时针90°+垂直翻转 <br>  Clockwise 90° + Vertical flip |
 
 <span id="fileStatus">**fileStatus**</span>: 文件状态
 标志文件是否已经存在,使用[scanDisk](#scanDisk)时,使用的状态的:kFileStatusFromLocal
 当需要服务端生成缩略图时,其相应字段需要设置为 kFileStatusFromLocal,否则不进行缩略图生成
+
+File status
+Mark whether the file already exists.
+If you want the server generate thumbnails,must set field value: kFileStatusFromLocal
+
+
 ```basic
-kFileStatusFromLocal        = 0 # 来自本地
-kFileStatusBuildError       = 1 # 本地生成时出错
-kFileStatusFromUploading    = 2 # 来自上传
-kFileStatusFromUploaded     = 3 # 来自上传,并且已经上传完成```
+kFileStatusFromLocal        = 0 # 来自本地 & From local
+kFileStatusBuildError       = 1 # 本地生成时出错 & An error occurred when local building
+kFileStatusFromUploading    = 2 # 来自上传 & From upload, but not finished
+kFileStatusFromUploaded     = 3 # 来自上传,并且已经上传完成 & From upload and finished
+```
 
 数据库Files表字段说明: 
 √ 表示可能的值
+
+Database Files Table Field Description:
+√ indicates possible values
 
 | 字段名 | 字段含义 | kFileStatusFromLocal | kFileStatusBuildError | kFileStatusFromUploading | kFileStatusFromUploaded |
 | ------ | ------ | ------ | ------ | ------ | ------ |
@@ -523,6 +584,8 @@ shareFile.icc.mov?shareKey=xxx
 | width | int | 可选,宽度 |
 | height | int |  可选,高度 |
 | [orientation](#orientation) | int |  可选,媒体方向,若需要服务端生成缩略图,此值必须为有效值 |
+| longitude | double | 可选,经度|
+| latitude | double | 可选,纬度 |
 | memo | string |  可选,备注,最长 1024 |
 | helpInt | int | 可选,辅助信息 |
 | helpText | string | 可选, 辅助信息 |
@@ -604,6 +667,8 @@ shareFile.icc.mov?shareKey=xxx
 | importTime | [datetime](#datetime) | 可选, 导入时间 |
 | lastModifyTime | [datetime](#datetime) | 可选, 最后修改时间 |
 | duration | float | 可选,持续时间,视频与GIF有效 |
+| longitude | double | 可选,经度|
+| latitude | double | 可选,纬度 |
 | width | int | 可选,宽度 |
 | height | int |  可选,高度 |
 | [orientation](#orientation) | int |  可选,媒体方向,若需要服务端生成缩略图,此值必须为有效值 |

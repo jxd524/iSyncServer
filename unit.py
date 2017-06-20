@@ -281,6 +281,8 @@ def checkParamForInt(aParam):
     "检查是否为Int"
     return int(aParam)
 
+def checkParamForDouble(aParam):
+    return double(aparam)
 
 def checkParamForFileType(aParam):
     t = int(aParam)

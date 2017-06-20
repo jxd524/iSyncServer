@@ -111,6 +111,8 @@ kFileFieldLastModifyTime        = __incFieldWithInit() #最后更新时间
 kFileFieldSize                  = __incFieldWithInit() #文件大小
 kFileFieldType                  = __incFieldWithInit() #文件类型,定义为: FileType
 kFileFieldDuration              = __incFieldWithInit() #持续时间
+kFileFieldLongitude             = __incFieldWithInit() #经度
+kFileFieldLatitude              = __incFieldWithInit() #纬度
 kFileFieldWidth                 = __incFieldWithInit() #宽度
 kFileFieldHeight                = __incFieldWithInit() #高度
 kFileFieldStatusForThumb        = __incFieldWithInit() #缩略图状态, 参考 defines.FileStatus
@@ -144,6 +146,8 @@ def _FileCreateTableSQL():
                 statusForScreen integer,
                 statusForOrigin integer,
                 orientation integer,
+                longitude double,
+                latitude double,
                 memo varchar(1024),
                 helpInt integer,
                 helpText text,

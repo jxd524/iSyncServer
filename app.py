@@ -498,6 +498,8 @@ def appUploadFileInfo():
         {"name": "width", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "height", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "orientation", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "longitude", "checkfunc": unit.checkParamForDouble, "default": None},
+        {"name": "latitude", "checkfunc": unit.checkParamForDouble, "default": None},
         {"name": "memo", "checkfunc": unit.checkParamForLess1024, "default": None},
         {"name": "helpInt", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "helpText", "default": None},))
@@ -688,6 +690,8 @@ def appUpdateFile():
         {"name": "width", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "height", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "orientation", "checkfunc": unit.checkParamForInt, "default": None},
+        {"name": "longitude", "checkfunc": unit.checkParamForDouble, "default": None},
+        {"name": "latitude", "checkfunc": unit.checkParamForDouble, "default": None},
         {"name": "memo", "checkfunc": unit.checkParamForLess1024, "default": None},
         {"name": "helpInt", "checkfunc": unit.checkParamForInt, "default": None},
         {"name": "helpText", "default": None},))
@@ -716,5 +720,5 @@ def appUpdateFile():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", threaded=True, debug=True);
+    app.run(host="0.0.0.0", threaded=True, debug=False);
     # app.run(host="172.168.80.132", threaded=True, debug=True);
