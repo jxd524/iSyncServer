@@ -1,8 +1,0 @@
-[
-    {
-        "paths":["~/temp/myTest", "~/temp/DDLog"],
-        "users":[
-            {"name": "terry", "password": "123"}
-        ]
-    }
-]
