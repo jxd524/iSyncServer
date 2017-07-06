@@ -20,7 +20,6 @@ from cache import LoginInfo
 from responseHelp import checkApiParam
 from responseHelp import kParamForResult, kParamForErrorResponse, kParamForErrorRealCode, \
         kParamForLoginInfo, kParamForRequestParams
-# from log import logObject
 
 
 app = Flask(__name__);
@@ -418,7 +417,7 @@ def appGetThumb():
                 field = "statusForThumb" if nLevel == 0 else "statusForScreen"
                 _getDbManager().updateFile(nId, {field: defines.kFileStatusBuildError}, None)
         else:
-            nErrorCode = kCmdUserError_WaitUploading
+            nErrorCode = responseHelp.kCmdUserError_WaitUploading
     elif nStatus == defines.kFileStatusFromUploaded:
         #客户端上传,直接发送
         nCatalogId = dbFile[dataManager.kFileFieldRealCatalogId]
