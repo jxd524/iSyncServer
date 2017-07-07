@@ -16,8 +16,6 @@ Take a picture to see the effect
 On the left is the effect on the iphone, the right is in the raspberry side of the effect
 
 Let's take a look at my video, [click open](https://v.qq.com/x/page/x0522gkcfwr.html)
-<embed src="https://imgcache.qq.com/tencentvideo_v1/playerv3/TPout.swf?max_age=86400&v=20161117&vid=x0522gkcfwr&auto=0" allowFullScreen="true" quality="high" width="480" height="400" align="middle" allowScriptAccess="always" type="application/x-shockwave-flash"></embed>
-
 
 # OTHEN
 
