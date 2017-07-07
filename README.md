@@ -12,7 +12,7 @@ With [Raspberry Pi](https://www.raspberrypi.org/), through the HTTP protocol on 
 **Client** need to implement the following API interfaces as needed.Has provided the iOS client: [iPrivate](https://itunes.apple.com/us/app/iprivate-protect-your-privacy-photo-video/id992360900?l=zh&ls=1&mt=8)
 
 Take a picture to see the effect
-![](/files/20170707_iSyncServer1.png)
+![](http://icc.one/files/20170707_iSyncServer1.png)
 On the left is the effect on the iphone, the right is in the raspberry side of the effect
 
 Let's take a look at my video, [click open](https://v.qq.com/x/page/x0522gkcfwr.html)
