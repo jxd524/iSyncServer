@@ -5,7 +5,7 @@
 
 
 # Introduction
-With [Raspberry Pi](https://www.raspberrypi.org/), through the HTTP protocol on the mobile hard disk to operate. Scan the specified file path and write to the database, providing a series of API interfaces to add or delete or modify or search.Family members easy access to their media files
+With [Raspberry Pi](https://www.raspberrypi.org/), operate mobile hard disk through the HTTP protocol. Scan the specified file path and write to the database, providing a series of API interfaces to add or delete or modify or search.Family members easy access to their media files
 
 **Server** need install:pyenv, python3, flask. If you need to generate thumbnails of media files, get the media file information, you need to install: ffmpeg, Pillow
 
@@ -16,7 +16,8 @@ Take a picture to see the effect
 On the left is the effect on the iphone, the right is in the raspberry side of the effect
 
 Let's take a look at my video, [click open](https://v.qq.com/x/page/x0522gkcfwr.html)
-<iframe frameborder="0" width="640" height="498" src="https://v.qq.com/iframe/player.html?vid=x0522gkcfwr&tiny=0&auto=0" allowfullscreen></iframe>
+<embed src="https://imgcache.qq.com/tencentvideo_v1/playerv3/TPout.swf?max_age=86400&v=20161117&vid=x0522gkcfwr&auto=0" allowFullScreen="true" quality="high" width="480" height="400" align="middle" allowScriptAccess="always" type="application/x-shockwave-flash"></embed>
+
 
 # OTHEN
 
