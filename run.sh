@@ -173,5 +173,10 @@ python scanDisk.py
 echo "准备启动服务"
 python app.py &
 
-echo "all finished"
+echo "本地IP地址: "
+echo "Local ip address"
+ifconfig | grep "inet addr" | grep "Bcast" | awk -F: '{print $2}' | awk '{print $1}'
+
+echo "所有操作已经完成,服务将在后台运行"
+echo "All finished. Run iSyncServer in the background"
 
