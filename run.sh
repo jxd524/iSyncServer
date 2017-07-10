@@ -160,11 +160,11 @@ fi
 # 配置服务
 cd $iSyncRoot
 if [[ ! -s ${iSyncRoot}"/appConfigs.json" ]]; then
-    bash ./buildingConfig.sh
+    source ./buildingConfig.sh
 fi
 
-if [[ ! -s ${iSyncRoot}"/scanConfig.json" ]]; then
-    bash ./buildingScan.sh
+if [[ ! -s ${iSyncRoot}"/scanDiskConfig.json" ]]; then
+    source ./buildingScan.sh
 fi
 
 # 启动服务
