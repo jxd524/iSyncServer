@@ -404,7 +404,6 @@ class DataManager(JxdSqlDataBasic):
         waitDeletePaths = []
         for item in rows:
             s = item[kCatalogFieldPath]
-            s = s.lower()
             waitDeletePaths.append(s)
 
         #移动目录下的所有挂接到别的目录的子目录到实际位置
@@ -425,7 +424,7 @@ class DataManager(JxdSqlDataBasic):
         #删除记录
         self.delete(_kCatalogTableName, {formatInField("id",cids): None})
         self.delete(_kFileTableName, {formatInField("catalogId", cids): None})
-        self.delete(_kUserAssociateTableName, {formatInField("rootCatalogId", aLimitStrRootIds): None})
+        self.delete(_kUserAssociateTableName, {formatInField("rootCatalogId", cids): None})
 
         #删除文件
         unit.removePath(waitDeletePaths)

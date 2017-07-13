@@ -10,6 +10,9 @@
 # LastModifyDate: 2017-07-05 13:00
 #
 
+#关闭已经运行中的进程
+ps -A u | grep "python app.py" | awk '{print $2}' | xargs kill -9
+
 # 错误时退出
 set -e
 
@@ -27,7 +30,11 @@ function checkToUpdateSystem()
 # git 下载项目
 function checkout()
 {
-    [ -d "$2" ] || git clone --depth 1 "$1" "$2"
+    if [[ ! -d "$2" ]]; then
+        git clone --depth 1 "$1" "$2"
+        return 0
+    fi
+    return 1
 }
 
 # 确保安装GIT
@@ -72,6 +79,7 @@ PythonVersion="3.5.2"
 iSyncName="iSyncServerEnv${PythonVersion}"
 iSyncRoot="${HOME}/iSyncServer"
 
+set +e
 # checkout pyenv
 checkout "${GITHUB}/yyuu/pyenv.git"            "${PYENV_ROOT}"
 checkout "${GITHUB}/yyuu/pyenv-doctor.git"     "${PYENV_ROOT}/plugins/pyenv-doctor"
@@ -81,13 +89,27 @@ checkout "${GITHUB}/yyuu/pyenv-virtualenv.git" "${PYENV_ROOT}/plugins/pyenv-virt
 checkout "${GITHUB}/yyuu/pyenv-which-ext.git"  "${PYENV_ROOT}/plugins/pyenv-which-ext"
 
 # checkout iSyncServer
-checkout "${GITHUB}/jxd524/iSyncServer.git" "${HOME}/iSyncServer"
+checkout "${GITHUB}/jxd524/iSyncServer.git" "${iSyncRoot}"
+bSetupServer=$?
+if [[ $bSetupServer == 0 ]]; then
+    echo "set shell file"
+    chmod 777 ${iSyncRoot}/run.sh
+    chmod 777 ${iSyncRoot}/buildingConfig.sh
+    chmod 777 ${iSyncRoot}/buildingScan.sh
+
+    rcLocal="/etc/rc.local"
+    file="\"${iSyncRoot}/run.sh\""
+    if [[ -z "`cat ${rcLocal} | grep "${file}"`" ]]; then
+        echo "need add"
+        myinfo="su `users` -c ${file} &"
+        sed "/^exit /i${myinfo}" ${rcLocal} | sudo tee ${rcLocal}
+    fi
+fi
+
+set -e
 
 # 确保将pyenv 添加到环境
 if ! command -v pyenv 1>/dev/null; then
-    if [ ! -f $profile ]; then
-        touch ${profile}
-    fi
     export PATH="${PYENV_ROOT}/bin:$PATH"
     eval "$(pyenv init -)"
     eval "$(pyenv virtualenv-init -)"
@@ -166,6 +188,9 @@ fi
 if [[ ! -s ${iSyncRoot}"/scanDiskConfig.json" ]]; then
     source ./buildingScan.sh
 fi
+
+# 开机自启服务
+
 
 # 启动服务
 python scanDisk.py
