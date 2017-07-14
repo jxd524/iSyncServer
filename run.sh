@@ -59,10 +59,10 @@ if ! command -v ffmpeg 1>/dev/null 2>&1; then
           echo ${ffmpegSourcs[i]} | sudo tee -a /etc/apt/sources.list
         fi
     done
-    sudo apt-get update
-    sudo apt-get install deb-multimedia-keyring -y
+    sudo apt-key adv --recv-key --keyserver mirrors.ustc.edu.cn 5C808C2B65558117
+    sudo apt-get update -y
     sudo apt-get upgrade -y
-    sudo apt-get install ffmpeg -y
+    sudo apt-get install ffmpeg -y --force-yes
     bUpdateSystem=1
 
     if [[ -z "`ffmpeg -version`" ]]; then
